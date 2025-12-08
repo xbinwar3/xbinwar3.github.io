@@ -1,4 +1,7 @@
-
+---
+layout: default
+title: "足迹地图"
+---
     <style type="text/css">
      #mountainMap {width: 100%; height: 100%; overflow: hidden; margin:0; font-family:"微软雅黑";}
     </style>
