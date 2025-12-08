@@ -1,15 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+
     <style type="text/css">
-        body, html, #mountainMap {width: 100%; height: 100%; overflow: hidden; margin:0; font-family:"微软雅黑";}
+     #mountainMap {width: 100%; height: 100%; overflow: hidden; margin:0; font-family:"微软雅黑";}
     </style>
     <script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak=zXRSd3RxTMcC36ULo39lCAKPP6uZesER"></script>
-    <title>我的足迹</title>
-</head>
-<body>
+
     <div id="mountainMap"></div>
     <script type="text/javascript">
         // 初始化地图[3](@ref)
@@ -70,5 +64,3 @@
         // 自动调整地图视野以显示所有标记[3](@ref)
         map.setViewport(points);
     </script>
-</body>
-</html>
