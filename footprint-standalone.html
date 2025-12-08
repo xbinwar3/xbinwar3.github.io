@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>足迹地图</title>
+    <title>足迹地图 - 北京探索之旅</title>
     <style>
         * { 
             margin: 0; 
@@ -18,49 +18,244 @@
         }
         .map-header {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            top: 20px;
+            left: 20px;
             z-index: 1000;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 10px 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            max-width: 320px;
+            backdrop-filter: blur(5px);
         }
         .map-header h1 {
-            font-size: 18px;
+            font-size: 22px;
             color: #1890ff;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .map-header p {
             font-size: 14px;
             color: #666;
+            line-height: 1.5;
+        }
+        .map-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+        }
+        .map-controls button {
+            background: rgba(255, 255, 255, 0.95);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.3s;
+        }
+        .map-controls button:hover {
+            background: #f0f8ff;
+            transform: translateY(-2px);
+        }
+        .map-search {
+            position: absolute;
+            top: 70px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            width: 250px;
+        }
+        .map-search input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .map-search-results {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+            display: none;
+        }
+        .map-search-result {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .map-search-result:hover {
+            background: #f5f5f5;
+        }
+        .map-info-window {
+            padding: 10px;
         }
         .map-info-window h3 {
             margin: 0 0 10px 0;
             color: #1890ff;
             font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .map-info-window p {
-            margin: 5px 0;
+            margin: 8px 0;
             line-height: 1.5;
         }
         .map-info-window .status {
             color: #52c41a;
             font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
         .map-info-window .tip {
             font-size: 12px;
             color: #999;
-            margin-top: 5px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .map-legend {
+            position: absolute;
+            bottom: 30px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            font-size: 14px;
+        }
+        .map-legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            gap: 8px;
+        }
+        .map-legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+        .map-footer {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #666;
+        }
+        .high-mountain {
+            background: #ff4d4f;
+        }
+        .medium-mountain {
+            background: #faad14;
+        }
+        .low-mountain {
+            background: #52c41a;
+        }
+        .other-location {
+            background: #1890ff;
+        }
+        
+        /* 自定义标记样式 */
+        .custom-marker {
+            position: relative;
+            width: 30px;
+            height: 40px;
+        }
+        .marker-pin {
+            width: 30px;
+            height: 30px;
+            border-radius: 50% 50% 50% 0;
+            position: absolute;
+            transform: rotate(-45deg);
+            top: 0;
+            left: 0;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        .marker-pin::after {
+            content: '';
+            width: 18px;
+            height: 18px;
+            margin: 6px 0 0 6px;
+            background: #fff;
+            position: absolute;
+            border-radius: 50%;
+        }
+        .pulse {
+            display: block;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0.4;
+            transform: rotate(-45deg);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: rotate(-45deg) scale(1); opacity: 0.4; }
+            50% { transform: rotate(-45deg) scale(1.3); opacity: 0.2; }
+            100% { transform: rotate(-45deg) scale(1); opacity: 0.4; }
         }
     </style>
     <script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak=zXRSd3RxTMcC36ULo39lCAKPP6uZesER"></script>
 </head>
 <body>
     <div class="map-header">
-        <h1>足迹地图</h1>
-        <p>记录我在北京的探索旅程</p>
+        <h1>🏔️ 足迹地图</h1>
+        <p>记录我在北京的探索旅程，已征服 <span id="count">14</span> 个地点</p>
     </div>
+    
+    <div class="map-controls">
+        <button id="satelliteBtn">🌍 卫星视图</button>
+        <button id="normalBtn">🗺️ 普通视图</button>
+    </div>
+    
+    <div class="map-search">
+        <input type="text" id="searchInput" placeholder="搜索地点...">
+        <div class="map-search-results" id="searchResults"></div>
+    </div>
+    
+    <div class="map-legend">
+        <div class="map-legend-item">
+            <div class="map-legend-color high-mountain"></div>
+            <span>高山 (800米+)</span>
+        </div>
+        <div class="map-legend-item">
+            <div class="map-legend-color medium-mountain"></div>
+            <span>中山 (400-800米)</span>
+        </div>
+        <div class="map-legend-item">
+            <div class="map-legend-color low-mountain"></div>
+            <span>低山 (400米以下)</span>
+        </div>
+        <div class="map-legend-item">
+            <div class="map-legend-color other-location"></div>
+            <span>其他地点</span>
+        </div>
+    </div>
+    
+    <div class="map-footer">数据更新于 2023年10月</div>
+    
     <div id="mountainMap"></div>
     
     <script type="text/javascript">
@@ -79,28 +274,52 @@
             
             // 足迹数据
             var mountains = [
-                {name: "香山", point: "116.215851,39.982685", height: "575米", desc: "北京著名的红叶观赏地"},
-                {name: "百望山森林公园", point: "116.234,40.008", height: "210米", desc: "距离市区最近的森林公园之一"},
-                {name: "西山国家森林公园", point: "116.1975,39.9717", height: "300-400米", desc: "北京西山的天然氧吧"},
-                {name: "北宫国家森林公园", point: "116.125,39.870", height: "约349米", desc: "丰台区最大的森林公园"},
-                {name: "鹫峰国家森林公园", point: "116.083,40.067", height: "约450米", desc: "以奇峰怪石著称"},
-                {name: "凤凰岭自然风景区", point: "116.104,40.110", height: "约367米", desc: "奇峰怪石，景色秀丽"},
-                {name: "北京后花园（白虎涧）", point: "116.037372,40.121589", height: "880米", desc: "有'北京后花园'之称"},
-                {name: "白羊沟自然风景区", point: "115.950,40.200", height: "不详", desc: "自然风光优美的景区"},
-                {name: "十三陵碓臼峪自然风景区", point: "116.233,40.317", height: "不详", desc: "位于明十三陵景区内"},
-                {name: "黄花城水长城", point: "116.333,40.400", height: "不详", desc: "长城与水库完美结合"},
-                {name: "慕田峪长城", point: "116.567,40.433", height: "约1039米", desc: "著名的长城景区，风景壮丽"},
-                {name: "北京延庆世园公园", point: "115.970,40.447", height: "约500米", desc: "2019年世园会园区"},
-                {name: "昌平延寿寺", point: "116.317,40.283", height: "不详", desc: "历史悠久的佛教寺庙"},
-                {name: "密云水库", point: "116.900,40.483", height: "约150米", desc: "北京重要的水源地"}
+                {name: "香山", point: "116.215851,39.982685", height: "575米", desc: "北京著名的红叶观赏地", type: "low-mountain"},
+                {name: "百望山森林公园", point: "116.234,40.008", height: "210米", desc: "距离市区最近的森林公园之一", type: "low-mountain"},
+                {name: "西山国家森林公园", point: "116.1975,39.9717", height: "300-400米", desc: "北京西山的天然氧吧", type: "low-mountain"},
+                {name: "北宫国家森林公园", point: "116.125,39.870", height: "约349米", desc: "丰台区最大的森林公园", type: "low-mountain"},
+                {name: "鹫鹫峰国家森林公园", point: "116.083,40.067", height: "约450米", desc: "以奇峰怪石著称", type: "medium-mountain"},
+                {name: "凤凰岭自然风景区", point: "116.104,40.110", height: "约367米", desc: "奇峰怪石，景色秀丽", type: "low-mountain"},
+                {name: "北京后花园（白虎涧）", point: "116.037372,40.121589", height: "880米", desc: "有'北京后花园'之称", type: "high-mountain"},
+                {name: "白羊沟自然风景区", point: "115.950,40.200", height: "不详", desc: "自然风光优美的景区", type: "other-location"},
+                {name: "十三陵碓碓臼峪自然风景区", point: "116.233,40.317", height: "不详", desc: "位于明十三陵景区内", type: "other-location"},
+                {name: "黄花城水长城", point: "116.333,40.400", height: "不详", desc: "长城与水库完美结合", type: "other-location"},
+                {name: "慕田峪长城", point: "116.567,40.433", height: "约1039米", desc: "著名的长城景区，风景壮丽", type: "high-mountain"},
+                {name: "北京延庆世园公园", point: "115.970,40.447", height: "约500米", desc: "2019年世园会园区", type: "medium-mountain"},
+                {name: "昌平延寿寺", point: "116.317,40.283", height: "不详", desc: "历史悠久的佛教寺庙", type: "other-location"},
+                {name: "密云水库", point: "116.900,40.483", height: "约150米", desc: "北京重要的水源地", type: "other-location"}
             ];
             
             // 创建标记点数组，用于自动调整视野
             var points = [];
+            var markers = [];
+            
+            // 创建自定义标记图标
+            function createCustomIcon(type) {
+                var color;
+                switch(type) {
+                    case 'high-mountain': color = '#ff4d4f'; break;
+                    case 'medium-mountain': color = '#faad14'; break;
+                    case 'low-mountain': color = '#52c41a'; break;
+                    default: color = '#1890ff';
+                }
+                
+                // 创建SVG图标
+                var svg = '<svg width="30" height="40" xmlns="http://www.w3.org/2000/svg">' +
+                    '<path d="M15,0 C6.715,0 0,6.715 0,15 C0,23.285 15,40 15,40 C15,40 30,23.285 30,15 C30,6.715 23.285,0 15,0 Z" fill="' + color + '"/>' +
+                    '<circle cx="15" cy="15" r="8" fill="white"/>' +
+                    '</svg>';
+                
+                var icon = new BMap.Icon('data:image/svg+xml;base64,' + btoa(svg), new BMap.Size(30, 40), {
+                    anchor: new BMap.Size(15, 40),
+                    imageSize: new BMap.Size(30, 40)
+                });
+                
+                return icon;
+            }
             
             // 遍历添加标记
             for (var i = 0; i < mountains.length; i++) {
-                // 使用立即执行函数解决闭包问题
                 (function(mountain) {
                     var coords = mountain.point.split(',');
                     var point = new BMap.Point(
@@ -109,29 +328,34 @@
                     );
                     points.push(point);
                     
-                    // 创建标记
-                    var marker = new BMap.Marker(point);
+                    // 创建自定义标记
+                    var icon = createCustomIcon(mountain.type);
+                    var marker = new BMap.Marker(point, {icon: icon});
+                    
+                    // 添加标记到地图
                     map.addOverlay(marker);
+                    markers.push(marker);
                     
                     // 为每个标记创建独立的信息窗口
                     var infoContent = '<div class="map-info-window">' +
-                        '<h3>' + mountain.name + '</h3>' +
-                        '<p><strong>海拔高度：</strong>' + mountain.height + '</p>' +
-                        '<p><strong>简介：</strong>' + mountain.desc + '</p>' +
+                        '<h3>🏔️ ' + mountain.name + '</h3>' +
+                        '<p><strong>🗺️ 海拔高度：</strong>' + mountain.height + '</p>' +
+                        '<p><strong>📝 简介：</strong>' + mountain.desc + '</p>' +
                         '<p class="status">✅ 已征服</p>' +
                         '<p class="tip">点击地图其他位置关闭此窗口</p>' +
                         '</div>';
                     
                     var infoWindow = new BMap.InfoWindow(infoContent, {
-                        width: 250,
-                        height: 200
+                        width: 280,
+                        height: 220
                     });
                     
-                    // 添加点击事件
-                    marker.addEventListener("click", function() {
-                        this.openInfoWindow(infoWindow);
+                    // 修复点击事件 - 使用闭包捕获正确的marker和point
+                    marker.addEventListener("click", function(e) {
+                        map.openInfoWindow(infoWindow, point);
                     });
-                })(mountains[i]); // 立即执行，捕获当前值
+                    
+                })(mountains[i]);
             }
             
             // 自动调整地图视野以显示所有标记
@@ -150,6 +374,56 @@
             window.addEventListener('resize', function() {
                 map.checkResize();
             });
+            
+            // 地图类型切换
+            document.getElementById('satelliteBtn').addEventListener('click', function() {
+                map.setMapType(BMAP_SATELLITE_MAP);
+            });
+            
+            document.getElementById('normalBtn').addEventListener('click', function() {
+                map.setMapType(BMAP_NORMAL_MAP);
+            });
+            
+            // 搜索功能
+            var searchInput = document.getElementById('searchInput');
+            var searchResults = document.getElementById('searchResults');
+            
+            searchInput.addEventListener('input', function() {
+                var query = this.value.trim().toLowerCase();
+                searchResults.innerHTML = '';
+                searchResults.style.display = 'none';
+                
+                if (query.length === 0) return;
+                
+                var results = mountains.filter(function(mountain) {
+                    return mountain.name.toLowerCase().includes(query);
+                });
+                
+                if (results.length > 0) {
+                    results.forEach(function(mountain) {
+                        var resultEl = document.createElement('div');
+                        resultEl.className = 'map-search-result';
+                        resultEl.textContent = mountain.name;
+                        resultEl.addEventListener('click', function() {
+                            var coords = mountain.point.split(',');
+                            var point = new BMap.Point(
+                                parseFloat(coords[0]), 
+                                parseFloat(coords[1])
+                            );
+                            map.centerAndZoom(point, 15);
+                            searchResults.style.display = 'none';
+                            searchInput.value = '';
+                        });
+                        searchResults.appendChild(resultEl);
+                    });
+                    searchResults.style.display = 'block';
+                }
+            });
+            
+            // 点击地图其他区域关闭搜索结果
+            map.addEventListener('click', function() {
+                searchResults.style.display = 'none';
+            });
         }
         
         // 等待百度地图API加载完成
@@ -157,7 +431,7 @@
             initMap();
         } else {
             // 如果API未加载，添加加载完成后的回调
-            window.addEventListener('load', function() {
+            window.onload = function() {
                 if (typeof BMap !== 'undefined') {
                     initMap();
                 } else {
@@ -166,7 +440,7 @@
                         '<div style="text-align:center; padding: 50px; color: #666;">' +
                         '<p>地图加载失败，请刷新页面重试</p></div>';
                 }
-            });
+            };
         }
     </script>
 </body>
