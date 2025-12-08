@@ -12,62 +12,69 @@
 <body>
     <div id="mountainMap"></div>
     <script type="text/javascript">
-        // 初始化地图[3](@ref)
+        // 初始化地图
         var map = new BMap.Map("mountainMap");
         
-        // 设置初始中心点和缩放级别[3](@ref)
+        // 设置初始中心点和缩放级别
         map.centerAndZoom(new BMap.Point(110.0956, 34.4866), 5);
-        map.enableScrollWheelZoom(true); // 启用滚轮缩放[3](@ref)
+        map.enableScrollWheelZoom(true); // 启用滚轮缩放
         
-        // 添加地图控件[3](@ref)
+        // 添加地图控件
         map.addControl(new BMap.NavigationControl());
         map.addControl(new BMap.ScaleControl());
         
-        // 数据 
+        // 数据 - 可以添加更多信息
         var mountains = [
-            {name: "香山", point: "116.215851,39.982685", height: "575米"},
-            {name: "百望山森林公园", point: "116.234,40.008", height: "210米"},
-            {name: "西山国家森林公园", point: "116.1975,39.9717", height: "300-400米"},
-            {name: "北宫国家森林公园", point: "116.125,39.870", height: "约349米"},
-            {name: "鹫峰国家森林公园", point: "116.083,40.067", height: "约450米"},
-            {name: "凤凰岭自然风景区", point: "116.104,40.110", height: "约367米"},
-            {name: "北京后花园（白虎涧）", point: "116.037372,40.121589", height: "880米"},
-            {name: "白羊沟自然风景区", point: "115.950,40.200", height: "不详"},
-            {name: "十三陵碓臼峪自然风景区", point: "116.233,40.317", height: "不详"},
-            {name: "黄花城水长城", point: "116.333,40.400", height: "不详"},
-            {name: "慕田峪长城", point: "116.567,40.433", height: "约1039米"},
-            {name: "北京延庆世园公园", point: "115.970,40.447", height: "约500米"},
-            {name: "昌平延寿寺", point: "116.317,40.283", height: "不详"},
-            {name: "密云水库", point: "116.900,40.483", height: "约150米"}
+            {name: "香山", point: "116.215851,39.982685", height: "575米", description: "香山公园，赏红叶的著名景点"},
+            {name: "百望山森林公园", point: "116.234,40.008", height: "210米", description: "离市区较近的森林公园"},
+            {name: "西山国家森林公园", point: "116.1975,39.9717", height: "300-400米", description: "北京西山的森林公园"},
+            {name: "北宫国家森林公园", point: "116.125,39.870", height: "约349米", description: "丰台区的国家森林公园"},
+            {name: "鹫峰国家森林公园", point: "116.083,40.067", height: "约450米", description: "以奇峰怪石著称"},
+            {name: "凤凰岭自然风景区", point: "116.104,40.110", height: "约367米", description: "以奇峰怪石著称"},
+            {name: "北京后花园（白虎涧）", point: "116.037372,40.121589", height: "880米", description: "有\"北京后花园\"之称"},
+            {name: "白羊沟自然风景区", point: "115.950,40.200", height: "不详", description: "自然风光优美"},
+            {name: "十三陵碓臼峪自然风景区", point: "116.233,40.317", height: "不详", description: "位于十三陵景区内"},
+            {name: "黄花城水长城", point: "116.333,40.400", height: "不详", description: "长城与水库结合的景区"},
+            {name: "慕田峪长城", point: "116.567,40.433", height: "约1039米", description: "著名的长城景区"},
+            {name: "北京延庆世园公园", point: "115.970,40.447", height: "约500米", description: "2019年世园会园区"},
+            {name: "昌平延寿寺", point: "116.317,40.283", height: "不详", description: "历史悠久的寺庙"},
+            {name: "密云水库", point: "116.900,40.483", height: "约150米", description: "北京重要的水源地"}
         ];
         
-        // 创建标记点数组，用于自动调整视野[3](@ref)
+        // 创建标记点数组，用于自动调整视野
         var points = [];
         
-        // 遍历添加标记[7](@ref)
-        for (var i = 0; i < mountains.length; i++) {
-            var coords = mountains[i].point.split(',');
-            var point = new BMap.Point(parseFloat(coords[0]), parseFloat(coords[1]));
+        // 遍历添加标记 - 使用let解决闭包问题
+        for (let i = 0; i < mountains.length; i++) {
+            let coords = mountains[i].point.split(',');
+            let point = new BMap.Point(parseFloat(coords[0]), parseFloat(coords[1]));
             points.push(point);
             
-            // 创建标记[4](@ref)
-            var marker = new BMap.Marker(point);
+            // 创建标记
+            let marker = new BMap.Marker(point);
             map.addOverlay(marker);
             
-            // 添加信息窗口[4](@ref)
-            var infoWindow = new BMap.InfoWindow(
-                "<h3>" + mountains[i].name + "</h3>" +
-                "<p>海拔高度：" + mountains[i].height + "</p>" +
-                "<p>状态：✅ 已征服</p>"
+            // 为每个标记创建独立的信息窗口
+            let infoWindow = new BMap.InfoWindow(
+                "<h3 style='margin:0 0 10px 0;color:#1890ff;'>" + mountains[i].name + "</h3>" +
+                "<p><strong>海拔高度：</strong>" + mountains[i].height + "</p>" +
+                "<p><strong>描述：</strong>" + (mountains[i].description || "") + "</p>" +
+                "<p style='color:#52c41a;'><strong>状态：</strong>✅ 已征服</p>" +
+                "<p style='font-size:12px;color:#999;margin-top:5px;'>点击地图其他地方关闭此窗口</p>"
             );
             
-            // 添加点击事件[4](@ref)
+            // 添加点击事件 - 现在每个标记都有自己的infoWindow
             marker.addEventListener("click", function() {
                 this.openInfoWindow(infoWindow);
             });
         }
         
-        // 自动调整地图视野以显示所有标记[3](@ref)
+        // 点击地图其他地方关闭信息窗口
+        map.addEventListener("click", function(e) {
+            map.closeInfoWindow();
+        });
+        
+        // 自动调整地图视野以显示所有标记
         map.setViewport(points);
     </script>
 </body>
