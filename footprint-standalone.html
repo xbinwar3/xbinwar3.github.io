@@ -1,81 +1,173 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
-    <style type="text/css">
-        body, html, #mountainMap {width: 100%; height: 100%; overflow: hidden; margin:0; font-family:"微软雅黑";}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>足迹地图</title>
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        body, html, #mountainMap { 
+            width: 100%; 
+            height: 100%; 
+            font-family: "微软雅黑", Arial, sans-serif;
+            overflow: hidden;
+        }
+        .map-header {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        .map-header h1 {
+            font-size: 18px;
+            color: #1890ff;
+            margin-bottom: 5px;
+        }
+        .map-header p {
+            font-size: 14px;
+            color: #666;
+        }
+        .map-info-window h3 {
+            margin: 0 0 10px 0;
+            color: #1890ff;
+            font-size: 18px;
+        }
+        .map-info-window p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        .map-info-window .status {
+            color: #52c41a;
+            font-weight: bold;
+        }
+        .map-info-window .tip {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
     </style>
     <script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak=zXRSd3RxTMcC36ULo39lCAKPP6uZesER"></script>
-    <title>我的足迹</title>
 </head>
 <body>
+    <div class="map-header">
+        <h1>足迹地图</h1>
+        <p>记录我在北京的探索旅程</p>
+    </div>
     <div id="mountainMap"></div>
+    
     <script type="text/javascript">
         // 初始化地图
-        var map = new BMap.Map("mountainMap");
-        
-        // 设置初始中心点和缩放级别
-        map.centerAndZoom(new BMap.Point(110.0956, 34.4866), 5);
-        map.enableScrollWheelZoom(true); // 启用滚轮缩放
-        
-        // 添加地图控件
-        map.addControl(new BMap.NavigationControl());
-        map.addControl(new BMap.ScaleControl());
-        
-        // 数据 - 可以添加更多信息
-        var mountains = [
-            {name: "香山", point: "116.215851,39.982685", height: "575米", description: "香山公园，赏红叶的著名景点"},
-            {name: "百望山森林公园", point: "116.234,40.008", height: "210米", description: "离市区较近的森林公园"},
-            {name: "西山国家森林公园", point: "116.1975,39.9717", height: "300-400米", description: "北京西山的森林公园"},
-            {name: "北宫国家森林公园", point: "116.125,39.870", height: "约349米", description: "丰台区的国家森林公园"},
-            {name: "鹫峰国家森林公园", point: "116.083,40.067", height: "约450米", description: "以奇峰怪石著称"},
-            {name: "凤凰岭自然风景区", point: "116.104,40.110", height: "约367米", description: "以奇峰怪石著称"},
-            {name: "北京后花园（白虎涧）", point: "116.037372,40.121589", height: "880米", description: "有\"北京后花园\"之称"},
-            {name: "白羊沟自然风景区", point: "115.950,40.200", height: "不详", description: "自然风光优美"},
-            {name: "十三陵碓臼峪自然风景区", point: "116.233,40.317", height: "不详", description: "位于十三陵景区内"},
-            {name: "黄花城水长城", point: "116.333,40.400", height: "不详", description: "长城与水库结合的景区"},
-            {name: "慕田峪长城", point: "116.567,40.433", height: "约1039米", description: "著名的长城景区"},
-            {name: "北京延庆世园公园", point: "115.970,40.447", height: "约500米", description: "2019年世园会园区"},
-            {name: "昌平延寿寺", point: "116.317,40.283", height: "不详", description: "历史悠久的寺庙"},
-            {name: "密云水库", point: "116.900,40.483", height: "约150米", description: "北京重要的水源地"}
-        ];
-        
-        // 创建标记点数组，用于自动调整视野
-        var points = [];
-        
-        // 遍历添加标记 - 使用let解决闭包问题
-        for (let i = 0; i < mountains.length; i++) {
-            let coords = mountains[i].point.split(',');
-            let point = new BMap.Point(parseFloat(coords[0]), parseFloat(coords[1]));
-            points.push(point);
+        function initMap() {
+            // 创建地图实例
+            var map = new BMap.Map("mountainMap");
             
-            // 创建标记
-            let marker = new BMap.Marker(point);
-            map.addOverlay(marker);
+            // 设置初始中心点和缩放级别
+            map.centerAndZoom(new BMap.Point(116.404, 39.915), 11);
+            map.enableScrollWheelZoom(true);
             
-            // 为每个标记创建独立的信息窗口
-            let infoWindow = new BMap.InfoWindow(
-                "<h3 style='margin:0 0 10px 0;color:#1890ff;'>" + mountains[i].name + "</h3>" +
-                "<p><strong>海拔高度：</strong>" + mountains[i].height + "</p>" +
-                "<p><strong>描述：</strong>" + (mountains[i].description || "") + "</p>" +
-                "<p style='color:#52c41a;'><strong>状态：</strong>✅ 已征服</p>" +
-                "<p style='font-size:12px;color:#999;margin-top:5px;'>点击地图其他地方关闭此窗口</p>"
-            );
+            // 添加地图控件
+            map.addControl(new BMap.NavigationControl());
+            map.addControl(new BMap.ScaleControl());
             
-            // 添加点击事件 - 现在每个标记都有自己的infoWindow
-            marker.addEventListener("click", function() {
-                this.openInfoWindow(infoWindow);
+            // 足迹数据
+            var mountains = [
+                {name: "香山", point: "116.215851,39.982685", height: "575米", desc: "北京著名的红叶观赏地"},
+                {name: "百望山森林公园", point: "116.234,40.008", height: "210米", desc: "距离市区最近的森林公园之一"},
+                {name: "西山国家森林公园", point: "116.1975,39.9717", height: "300-400米", desc: "北京西山的天然氧吧"},
+                {name: "北宫国家森林公园", point: "116.125,39.870", height: "约349米", desc: "丰台区最大的森林公园"},
+                {name: "鹫峰国家森林公园", point: "116.083,40.067", height: "约450米", desc: "以奇峰怪石著称"},
+                {name: "凤凰岭自然风景区", point: "116.104,40.110", height: "约367米", desc: "奇峰怪石，景色秀丽"},
+                {name: "北京后花园（白虎涧）", point: "116.037372,40.121589", height: "880米", desc: "有'北京后花园'之称"},
+                {name: "白羊沟自然风景区", point: "115.950,40.200", height: "不详", desc: "自然风光优美的景区"},
+                {name: "十三陵碓臼峪自然风景区", point: "116.233,40.317", height: "不详", desc: "位于明十三陵景区内"},
+                {name: "黄花城水长城", point: "116.333,40.400", height: "不详", desc: "长城与水库完美结合"},
+                {name: "慕田峪长城", point: "116.567,40.433", height: "约1039米", desc: "著名的长城景区，风景壮丽"},
+                {name: "北京延庆世园公园", point: "115.970,40.447", height: "约500米", desc: "2019年世园会园区"},
+                {name: "昌平延寿寺", point: "116.317,40.283", height: "不详", desc: "历史悠久的佛教寺庙"},
+                {name: "密云水库", point: "116.900,40.483", height: "约150米", desc: "北京重要的水源地"}
+            ];
+            
+            // 创建标记点数组，用于自动调整视野
+            var points = [];
+            
+            // 遍历添加标记
+            for (var i = 0; i < mountains.length; i++) {
+                // 使用立即执行函数解决闭包问题
+                (function(mountain) {
+                    var coords = mountain.point.split(',');
+                    var point = new BMap.Point(
+                        parseFloat(coords[0]), 
+                        parseFloat(coords[1])
+                    );
+                    points.push(point);
+                    
+                    // 创建标记
+                    var marker = new BMap.Marker(point);
+                    map.addOverlay(marker);
+                    
+                    // 为每个标记创建独立的信息窗口
+                    var infoContent = '<div class="map-info-window">' +
+                        '<h3>' + mountain.name + '</h3>' +
+                        '<p><strong>海拔高度：</strong>' + mountain.height + '</p>' +
+                        '<p><strong>简介：</strong>' + mountain.desc + '</p>' +
+                        '<p class="status">✅ 已征服</p>' +
+                        '<p class="tip">点击地图其他位置关闭此窗口</p>' +
+                        '</div>';
+                    
+                    var infoWindow = new BMap.InfoWindow(infoContent, {
+                        width: 250,
+                        height: 200
+                    });
+                    
+                    // 添加点击事件
+                    marker.addEventListener("click", function() {
+                        this.openInfoWindow(infoWindow);
+                    });
+                })(mountains[i]); // 立即执行，捕获当前值
+            }
+            
+            // 自动调整地图视野以显示所有标记
+            if (points.length > 0) {
+                setTimeout(function() {
+                    map.setViewport(points);
+                }, 500);
+            }
+            
+            // 点击地图其他地方关闭信息窗口
+            map.addEventListener("click", function() {
+                map.closeInfoWindow();
+            });
+            
+            // 窗口大小变化时重置地图
+            window.addEventListener('resize', function() {
+                map.checkResize();
             });
         }
         
-        // 点击地图其他地方关闭信息窗口
-        map.addEventListener("click", function(e) {
-            map.closeInfoWindow();
-        });
-        
-        // 自动调整地图视野以显示所有标记
-        map.setViewport(points);
+        // 等待百度地图API加载完成
+        if (typeof BMap !== 'undefined') {
+            initMap();
+        } else {
+            // 如果API未加载，添加加载完成后的回调
+            window.addEventListener('load', function() {
+                if (typeof BMap !== 'undefined') {
+                    initMap();
+                } else {
+                    console.error('百度地图API加载失败');
+                    document.getElementById('mountainMap').innerHTML = 
+                        '<div style="text-align:center; padding: 50px; color: #666;">' +
+                        '<p>地图加载失败，请刷新页面重试</p></div>';
+                }
+            });
+        }
     </script>
 </body>
 </html>
