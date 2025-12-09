@@ -101,7 +101,6 @@
         }
         .map-info-window {
             padding: 10px;
-            position: relative;
         }
         .map-info-window h3 {
             margin: 0 0 10px 0;
@@ -218,47 +217,32 @@
             100% { transform: rotate(-45deg) scale(1); opacity: 0.4; }
         }
         
-        /* 自定义信息窗口样式 */
-        .custom-info-window {
-            position: absolute;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            z-index: 10000;
-            min-width: 250px;
-            max-width: 300px;
-            animation: fadeIn 0.3s ease;
-        }
-        
-        .custom-close-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #f0f0f0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            z-index: 10001;
-        }
-        
-        .custom-close-btn:hover {
-            background: #e0e0e0;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        /* 移除对百度地图默认弹窗的干扰样式 */
+        /* 修复百度地图弹窗样式 */
         .BMap_pop {
-            display: none !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            display: block !important;
+            z-index: 10000 !important;
+            pointer-events: auto !important;
+        }
+        .BMap_bubble_content {
+            background-color: white !important;
+            padding: 15px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+            min-height: 150px !important;
+            min-width: 250px !important;
+            position: relative !important;
+        }
+        /* 确保关闭按钮可点击 */
+        .BMap_top {
+            z-index: 10001 !important;
+            pointer-events: auto !important;
+        }
+        .BMap_top img {
+            cursor: pointer !important;
+            pointer-events: auto !important;
+            z-index: 10002 !important;
         }
     </style>
     <script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak=zXRSd3RxTMcC36ULo39lCAKPP6uZesER"></script>
@@ -303,14 +287,13 @@
     <div id="mountainMap"></div>
     
     <script type="text/javascript">
-        // 全局变量
-        var currentInfoWindow = null;
-        var map = null;
+        // 全局信息窗口实例
+        var globalInfoWindow = null;
         
         // 初始化地图
         function initMap() {
             // 创建地图实例
-            map = new BMap.Map("mountainMap");
+            var map = new BMap.Map("mountainMap");
             
             // 设置初始中心点和缩放级别
             map.centerAndZoom(new BMap.Point(116.404, 39.915), 11);
@@ -319,6 +302,13 @@
             // 添加地图控件
             map.addControl(new BMap.NavigationControl());
             map.addControl(new BMap.ScaleControl());
+            
+            // 创建全局信息窗口
+            globalInfoWindow = new BMap.InfoWindow('', {
+                width: 280,
+                height: 220,
+                enableMessage: true // 启用关闭按钮
+            });
             
             // 足迹数据
             var mountains = [
@@ -366,120 +356,6 @@
                 return icon;
             }
             
-            // 创建自定义信息窗口
-            function createCustomInfoWindow(mountain, point) {
-                // 先关闭现有的信息窗口
-                closeCustomInfoWindow();
-                
-                // 创建信息窗口DOM元素
-                var infoWindow = document.createElement('div');
-                infoWindow.className = 'custom-info-window';
-                infoWindow.innerHTML = `
-                    <div class="map-info-window">
-                        <div class="custom-close-btn" onclick="closeCustomInfoWindow()">×</div>
-                        <h3>🏔🏔 ${mountain.name}</h3>
-                        <p><strong>🗺🗺 海拔高度：</strong>${mountain.height}</p>
-                        <p><strong>📝📝 简介：</strong>${mountain.desc}</p>
-                        <p class="status">✅ 已征服</p>
-                        <p class="tip">点击关闭按钮或地图其他位置关闭此窗口</p>
-                    </div>
-                `;
-                
-                // 将信息窗口添加到地图容器
-                document.getElementById('mountainMap').appendChild(infoWindow);
-                
-                // 定位信息窗口
-                positionInfoWindow(infoWindow, point);
-                
-                // 保存当前信息窗口引用
-                currentInfoWindow = infoWindow;
-                
-                // 添加地图点击关闭事件 - 修复版
-                var closeHandler = function(e) {
-                    // 获取实际的DOM事件目标
-                    var target = e.domEvent ? e.domEvent.target : 
-                                (e.target && e.target.nodeType === 1 ? e.target : null);
-                    
-                    // 如果无法获取有效目标，直接关闭信息窗口
-                    if (!target) {
-                        closeCustomInfoWindow();
-                        return;
-                    }
-                    
-                    // 检查点击目标是否在信息窗口内
-                    var isInsideInfoWindow = false;
-                    var currentElement = target;
-                    
-                    while (currentElement && currentElement !== document.body) {
-                        if (currentElement === infoWindow) {
-                            isInsideInfoWindow = true;
-                            break;
-                        }
-                        currentElement = currentElement.parentNode;
-                    }
-                    
-                    // 如果点击不在信息窗口内，则关闭信息窗口
-                    if (!isInsideInfoWindow) {
-                        closeCustomInfoWindow();
-                    }
-                };
-                
-                // 延迟添加事件监听，避免立即触发
-                setTimeout(() => {
-                    map.addEventListener('click', closeHandler);
-                    infoWindow.closeHandler = closeHandler;
-                }, 100);
-                
-                // 添加ESC键关闭功能
-                var escHandler = function(e) {
-                    if (e.key === 'Escape') {
-                        closeCustomInfoWindow();
-                    }
-                };
-                document.addEventListener('keydown', escHandler);
-                infoWindow.escHandler = escHandler;
-            }
-            
-            // 定位信息窗口
-            function positionInfoWindow(infoWindow, point) {
-                var mapContainer = document.getElementById('mountainMap');
-                var mapRect = mapContainer.getBoundingClientRect();
-                
-                // 将地图点转换为像素坐标
-                var pixel = map.pointToOverlayPixel(point);
-                
-                // 计算信息窗口位置（确保在可视区域内）
-                var left = pixel.x - 150; // 居中
-                var top = pixel.y - infoWindow.offsetHeight - 20; // 在标记点上方
-                
-                // 边界检查
-                if (left < 10) left = 10;
-                if (left + infoWindow.offsetWidth > mapRect.width - 10) {
-                    left = mapRect.width - infoWindow.offsetWidth - 10;
-                }
-                if (top < 10) top = 10;
-                
-                infoWindow.style.left = left + 'px';
-                infoWindow.style.top = top + 'px';
-            }
-            
-            // 关闭自定义信息窗口
-            window.closeCustomInfoWindow = function() {
-                if (currentInfoWindow) {
-                    // 移除事件监听
-                    if (currentInfoWindow.closeHandler) {
-                        map.removeEventListener('click', currentInfoWindow.closeHandler);
-                    }
-                    if (currentInfoWindow.escHandler) {
-                        document.removeEventListener('keydown', currentInfoWindow.escHandler);
-                    }
-                    
-                    // 移除DOM元素
-                    currentInfoWindow.remove();
-                    currentInfoWindow = null;
-                }
-            };
-            
             // 遍历添加标记
             for (var i = 0; i < mountains.length; i++) {
                 (function(mountain) {
@@ -498,15 +374,46 @@
                     map.addOverlay(marker);
                     markers.push(marker);
                     
-                    // 标记点击事件 - 使用自定义信息窗口
+                    // 修复后的点击事件处理 - 使用全局信息窗口
                     marker.addEventListener("click", function(e) {
+                        // 关闭其他信息窗口
+                        map.closeInfoWindow();
+                        
+                        // 创建信息窗口内容
+                        var infoContent = '<div class="map-info-window">' +
+                            '<h3>🏔🏔 ' + mountain.name + '</h3>' +
+                            '<p><strong>🗺🗺 海拔高度：</strong>' + mountain.height + '</p>' +
+                            '<p><strong>📝📝 简介：</strong>' + mountain.desc + '</p>' +
+                            '<p class="status">✅ 已征服</p>' +
+                            '<p class="tip">点击地图其他位置关闭此窗口</p>' +
+                            '</div>';
+                        
+                        // 设置全局信息窗口内容
+                        globalInfoWindow.setContent(infoContent);
+                        
                         // 确保地图中心在点击位置
                         map.panTo(point);
                         
                         // 延迟打开信息窗口，确保地图已移动
                         setTimeout(function() {
-                            createCustomInfoWindow(mountain, point);
-                        }, 300);
+                            map.openInfoWindow(globalInfoWindow, point);
+                            
+                            // 添加关闭按钮的事件监听（备用方案）
+                            setTimeout(function() {
+                                var closeBtn = document.querySelector('.BMap_pop img[src*="close"]');
+                                if (closeBtn) {
+                                    closeBtn.onclick = function() {
+                                        map.closeInfoWindow();
+                                        document.querySelectorAll('.BMap_pop').forEach(function(element) {
+                                            element.parentNode.removeChild(element);
+                                        });
+                                    };
+                                    // 确保关闭按钮可点击
+                                    closeBtn.style.pointerEvents = 'auto';
+                                    closeBtn.style.cursor = 'pointer';
+                                }
+                            }, 100);
+                        }, 100);
                     });
                     
                 })(mountains[i]);
@@ -519,16 +426,20 @@
                 }, 500);
             }
             
-            // 窗口大小变化时重置地图和重新定位信息窗口
+            // 改进的地图点击事件处理
+            map.addEventListener("click", function(e) {
+                // 只有当点击的不是标记点时才关闭信息窗口
+                if (!e.overlay || e.overlay.toString().indexOf('Marker') === -1) {
+                    map.closeInfoWindow();
+                    document.querySelectorAll('.BMap_pop').forEach(function(element) {
+                        element.parentNode.removeChild(element);
+                    });
+                }
+            });
+            
+            // 窗口大小变化时重置地图
             window.addEventListener('resize', function() {
                 map.checkResize();
-                // 如果信息窗口打开，重新定位
-                if (currentInfoWindow) {
-                    var markerPoint = markers[0].getPosition(); // 简化处理，实际应该保存对应的点
-                    setTimeout(() => {
-                        positionInfoWindow(currentInfoWindow, markerPoint);
-                    }, 100);
-                }
             });
             
             // 地图类型切换
@@ -569,9 +480,6 @@
                             map.centerAndZoom(point, 15);
                             searchResults.style.display = 'none';
                             searchInput.value = '';
-                            
-                            // 关闭可能打开的信息窗口
-                            closeCustomInfoWindow();
                         });
                         searchResults.appendChild(resultEl);
                     });
@@ -580,8 +488,15 @@
             });
             
             // 点击地图其他区域关闭搜索结果
-            map.addEventListener('click', function(e) {
+            map.addEventListener('click', function() {
                 searchResults.style.display = 'none';
+            });
+            
+            // 添加键盘ESC键关闭信息窗口功能
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    map.closeInfoWindow();
+                }
             });
         }
         
