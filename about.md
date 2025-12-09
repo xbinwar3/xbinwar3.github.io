@@ -3,5 +3,5 @@ layout: page
 title: About
 permalink: /about
 ---
-[<img src="https://www.mooc.org/hubfs/applications-of-computer-programming.jpg" alt="about" />]({{ site.baseurl }}/)
+[聚焦问题，萃取思路，简化行动。]({{ site.baseurl }}/)
 
