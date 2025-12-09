@@ -222,9 +222,10 @@
             opacity: 1 !important;
             visibility: visible !important;
             display: block !important;
-            z-index: 10000 !important;
+            z-index: 9999 !important; /* 提高z-index值 */
             pointer-events: auto !important;
         }
+
         .BMap_bubble_content {
             background-color: white !important;
             padding: 15px !important;
@@ -233,16 +234,18 @@
             min-height: 150px !important;
             min-width: 250px !important;
             position: relative !important;
+            z-index: 10000 !important; /* 提高z-index值 */
         }
-        /* 确保关闭按钮可点击 */
+
         .BMap_top {
-            z-index: 10001 !important;
+            z-index: 10001 !important; /* 提高z-index值 */
             pointer-events: auto !important;
         }
+
         .BMap_top img {
             cursor: pointer !important;
             pointer-events: auto !important;
-            z-index: 10002 !important;
+            z-index: 10002 !important; /* 提高z-index值 */
         }
     </style>
     <script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak=zXRSd3RxTMcC36ULo39lCAKPP6uZesER"></script>
@@ -250,7 +253,7 @@
 <body>
     <div class="map-header">
         <h1>🏔🏔 足迹地图</h1>
-        <p>记录我在北京的探索旅程，已征服 <span id="count">14</span> 个地点</p>
+        <p>记录我在北京的探索旅程，已征服 <span id="count"></span> 个地点</p>
     </div>
     
     <div class="map-controls">
@@ -325,9 +328,21 @@
                 {name: "慕田峪长城", point: "116.567,40.433", height: "约1039米", desc: "著名的长城景区，风景壮丽", type: "high-mountain"},
                 {name: "北京延庆世园公园", point: "115.970,40.447", height: "约500米", desc: "2019年世园会园区", type: "medium-mountain"},
                 {name: "昌平延寿寺", point: "116.317,40.283", height: "不详", desc: "历史悠久的佛教寺庙", type: "other-location"},
-                {name: "密云水库", point: "116.900,40.483", height: "约150米", desc: "北京重要的水源地", type: "other-location"}
+                {name: "密云水库", point: "116.900,40.483", height: "约150米", desc: "北京重要的水源地", type: "other-location"},
+                {name: "奥林匹克森林公园", point: "116.3842,40.0175", height: "86.5米", desc: "北京奥运会的后花园，户外大氧吧", type: "other-location"},
+                {name: "东小口森林公园", point: "116.410,40.060", height: "不详", desc: "北京北部地区一处集生态、休闲、运动于一体的郊野公园", type: "other-location"},
+                {name: "贺新公园", point: "116.400,40.060", height: "不详", desc: "信息缺失，待补充", type: "other-location"},
+                {name: "北京国际鲜花港", point: "116.830,40.150", height: "不详", desc: "信息缺失，待补充", type: "other-location"},
+                {name: "顺义蟹岛", point: "116.583,40.100", height: "不详", desc: "信息缺失，待补充", type: "other-location"},
+                {name: "天坛公园", point: "116.417,39.883", height: "约43米", desc: "明、清两代帝王祭天、祈谷的场所", type: "other-location"},
+                {name: "北京野生动物园", point: "116.317,39.517", height: "不详", desc: "快到河北了", type: "other-location"},
+                {name: "平谷桃花海", point: "117.27,40.18", height: "约100-300米", desc: "世界最大的22万亩桃园，春季花海绚烂", type: "other-location"},
+                {name: "十渡风景名胜区", point: "115.600,39.640", height: "最高点1210.8米", desc: "中国北方大规模喀斯特岩溶地貌，世界地质公园", type: "high-mountain"},
+                {name: "世界公园", point: "116.300,39.815", height: "不详", desc: "汇集世界名胜的微缩景观公园", type: "other-location"},
+                {name: "兴海公园", point: "116.460,39.760", height: "不详", desc: "位于大兴区瀛海镇，是一个融入航天主题的社区公园", type: "other-location"}
             ];
             
+            document.getElementById("count").innerText = mountains.length
             // 创建标记点数组，用于自动调整视野
             var points = [];
             var markers = [];
