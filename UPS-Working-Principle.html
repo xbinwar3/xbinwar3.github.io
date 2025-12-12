@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPS 标准化拓扑演示</title>
+    <style>
+        :root {
+            --bg-color: #1e1e24;
+            --panel-color: #2b2b35;
+            --color-mains: #00ff88;    /* 主路 - 绿 */
+            --color-battery: #ffaa00;  /* 电池 - 橙 */
+            --color-bypass: #00ccff;   /* 旁路 - 蓝 */
+            --color-maint: #e040fb;    /* 维修 - 紫 */
+            --color-off: #444;         /* 断路 - 灰 */
+            --component-fill: #3a3a45;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Roboto', sans-serif;
+            background-color: var(--bg-color);
+            color: #eee;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            background: var(--panel-color);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        }
+
+        /* 按钮组 */
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 25px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: 1px solid #555;
+            background: var(--component-fill);
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        button:hover { filter: brightness(1.2); transform: translateY(-2px); }
+        button.active { border-color: #fff; box-shadow: 0 0 12px rgba(255,255,255,0.15); font-weight: bold;}
+
+        button[data-mode="normal"].active { background: var(--color-mains); color: #000; }
+        button[data-mode="battery"].active { background: var(--color-battery); color: #000; }
+        button[data-mode="bypass"].active { background: var(--color-bypass); color: #000; }
+        button[data-mode="maint"].active { background: var(--color-maint); color: #fff; }
+        button[data-mode="off"].active { background: #ff4444; color: #fff; }
+
+        /* 图表区 */
+        .diagram {
+            position: relative;
+            background: #222;
+            border: 1px solid #444;
+            border-radius: 8px;
+            overflow: hidden;
+            width: 100%;
+            padding-bottom: 50%; /* 调整纵横比 */
+        }
+
+        svg {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+        }
+
+        /* 文本 */
+        .label-text { fill: #ccc; font-size: 12px; font-weight: 600; text-anchor: end;}
+        .label-sub { fill: #666; font-size: 10px; text-anchor: end;}
+
+        /* 线条 */
+        .wire {
+            fill: none;
+            stroke: var(--color-off);
+            stroke-width: 4;
+            stroke-linecap: square; /* 直角端点 */
+            stroke-linejoin: miter; /* 直角转弯 */
+            transition: stroke 0.3s;
+        }
+
+        /* 虚线流动动画 */
+        .dashed-flow { stroke-dasharray: 12 12; animation: flow 1s linear infinite; }
+        .dashed-flow-reverse { stroke-dasharray: 12 12; animation: flow-rev 1s linear infinite; }
+        @keyframes flow { to { stroke-dashoffset: -24; } }
+        @keyframes flow-rev { to { stroke-dashoffset: 24; } }
+
+        /* 状态色 */
+        .stroke-mains { stroke: var(--color-mains); }
+        .stroke-battery { stroke: var(--color-battery); }
+        .stroke-bypass { stroke: var(--color-bypass); }
+        .stroke-maint { stroke: var(--color-maint); }
+
+        /* 箭头 */
+        .static-arrow { fill: var(--color-off); transition: fill 0.3s; }
+        .fill-mains { fill: var(--color-mains); }
+        .fill-battery { fill: var(--color-battery); }
+        .fill-bypass { fill: var(--color-bypass); }
+        .fill-maint { fill: var(--color-maint); }
+        .arrow-hidden { display: none; }
+
+        /* 组件盒子 (统一大小) */
+        .comp-box { fill: var(--component-fill); stroke: #888; stroke-width: 2; }
+        .comp-text { fill: #fff; font-size: 14px; font-weight: bold; text-anchor: middle; pointer-events: none; }
+        
+        /* 描述区 */
+        .desc { margin-top: 15px; padding: 15px; border-left: 4px solid #fff; background: rgba(255,255,255,0.05); }
+
+    </style>
+</head>
+<body>
+
+    <h2>UPS 工作原理</h2>
+
+    <div class="container">
+        <div class="controls">
+            <button data-mode="normal" onclick="setMode('normal')" class="active">市电模式</button>
+            <button data-mode="battery" onclick="setMode('battery')">电池模式</button>
+            <button data-mode="bypass" onclick="setMode('bypass')">旁路模式</button>
+            <button data-mode="maint" onclick="setMode('maint')">维修模式</button>
+            <button data-mode="off" onclick="setMode('off')">关机</button>
+        </div>
+
+        <div class="diagram">
+            <svg viewBox="0 0 900 450">
+                
+                <!-- === 左侧输入标签 (右对齐) === -->
+                <text x="90" y="145" class="label-text">旁路输入</text>
+                <text x="90" y="160" class="label-sub">Bypass Input</text>
+
+                <text x="90" y="265" class="label-text">主路输入</text>
+                <text x="90" y="280" class="label-sub">Mains Input</text>
+
+                <!-- === 核心连线 (尽量直线) === -->
+                <!-- 坐标基准：
+                     上层维修线 y = 50
+                     中层旁路线 y = 140
+                     主层组件线 y = 260 (组件中心)
+                     底层电池线 y = 380
+                     组件大小 100x80, y_pos = 220
+                -->
+
+                <!-- 1. 旁路输入源 (起点 x=100) -->
+                <!-- 直线到分叉点 -->
+                <path id="w-bp-src" d="M 100 140 L 160 140" class="wire" />
+
+                <!-- 1a. 维修旁路 (向上 -> 向右 -> 向下) -->
+                <path id="w-maint" d="M 160 140 L 160 50 L 820 50 L 820 220" class="wire" />
+
+                <!-- 1b. 静态旁路 (向右水平直达 STS 顶部) -->
+                <!-- 从 160,140 直达 STS的x中心(670) -->
+                <path id="w-bp-path" d="M 160 140 L 670 140 L 670 220" class="wire" />
+
+                <!-- 2. 主路输入 -> 整流器 (水平直线) -->
+                <path id="w-mains" d="M 100 260 L 220 260" class="wire" />
+
+                <!-- 3. 整流器 -> 逆变器 (水平直线) -->
+                <path id="w-dc" d="M 320 260 L 420 260" class="wire" />
+
+                <!-- 4. 电池连接 (垂直 T型) -->
+                <path id="w-bat" d="M 370 260 L 370 370" class="wire" />
+
+                <!-- 5. 逆变器 -> STS (水平直线) -->
+                <path id="w-inv-out" d="M 520 260 L 620 260" class="wire" />
+
+                <!-- 6. STS -> 负载 (水平直线) -->
+                <path id="w-load" d="M 720 260 L 820 260" class="wire" />
+
+
+                <!-- === 箭头指示 (Fixed on straight lines) === -->
+                
+                <!-- 旁路输入 -->
+                <polygon id="a-bp-in" points="120,134 130,140 120,146" class="static-arrow arrow-hidden" />
+                <!-- 维修旁路 (上层) -->
+                <polygon id="a-maint" points="480,44 490,50 480,56" class="static-arrow arrow-hidden" />
+                <!-- 静态旁路 (中层) -->
+                <polygon id="a-bp-sts" points="400,134 410,140 400,146" class="static-arrow arrow-hidden" />
+
+                <!-- 主路输入 -->
+                <polygon id="a-mains" points="150,254 160,260 150,266" class="static-arrow" />
+                <!-- 直流母线 -->
+                <polygon id="a-dc" points="360,254 370,260 360,266" class="static-arrow" />
+
+                <!-- 电池充放电 -->
+                <polygon id="a-bat-chg" points="364,310 370,320 376,310" class="static-arrow arrow-hidden" />
+                <polygon id="a-bat-dis" points="364,300 370,290 376,300" class="static-arrow arrow-hidden" />
+
+                <!-- 逆变输出 -->
+                <polygon id="a-inv" points="560,254 570,260 560,266" class="static-arrow" />
+                <!-- 负载输入 -->
+                <polygon id="a-load" points="760,254 770,260 760,266" class="static-arrow" />
+
+
+                <!-- === 组件模块 (统一大小 100x80) === -->
+                
+                <!-- 维修开关 Q3 (Top Line) -->
+                <g transform="translate(450, 50)">
+                    <text x="0" y="-15" fill="#aaa" font-size="12" text-anchor="middle">Q3 维修开关</text>
+                    <circle cx="-20" cy="0" r="3" fill="#888"/>
+                    <circle cx="20" cy="0" r="3" fill="#888"/>
+                    <line id="sw-maint" x1="-20" y1="0" x2="15" y2="-15" stroke="#fff" stroke-width="3" />
+                </g>
+
+                <!-- 1. 整流器 (Rectifier) -->
+                <rect x="220" y="220" width="100" height="80" rx="3" class="comp-box"/>
+                <text x="270" y="250" class="comp-text">整流器</text>
+                <text x="270" y="270" class="comp-text" style="font-size:10px; fill:#aaa">AC/DC</text>
+
+                <!-- 2. 逆变器 (Inverter) -->
+                <rect x="420" y="220" width="100" height="80" rx="3" class="comp-box"/>
+                <text x="470" y="250" class="comp-text">逆变器</text>
+                <text x="470" y="270" class="comp-text" style="font-size:10px; fill:#aaa">DC/AC</text>
+
+                <!-- 3. STS (Static Transfer Switch) - 同样大小 -->
+                <rect x="620" y="220" width="100" height="80" rx="3" class="comp-box" style="stroke-dasharray: 4;"/>
+                <text x="690" y="235" class="comp-text" style="font-size:10px; fill:#aaa">STS</text>
+                
+                <!-- STS 内部逻辑图 -->
+                <!-- 输入点：左侧(逆变)、上方(旁路) -->
+                <!-- 输出点：右侧 -->
+                <circle cx="620" cy="260" r="3" fill="#666"/> <!-- 左接点 -->
+                <circle cx="670" cy="220" r="3" fill="#666"/> <!-- 上接点 -->
+                <circle cx="720" cy="260" r="3" fill="#fff"/> <!-- 右输出 -->
+                
+                <!-- STS 内部开关臂 -->
+                <!-- 默认接逆变(左->右) -->
+                <line id="sw-sts" x1="720" y1="260" x2="620" y2="260" stroke="#fff" stroke-width="3" />
+
+                <!-- 4. 负载 (Load) -->
+                <rect x="820" y="220" width="80" height="80" rx="3" class="comp-box" style="fill:#222"/>
+                <text x="860" y="260" class="comp-text">负载</text>
+
+                <!-- 5. 电池 (Battery) -->
+                <rect x="320" y="370" width="100" height="50" rx="3" class="comp-box"/>
+                <text x="370" y="400" class="comp-text">电池组</text>
+
+            </svg>
+        </div>
+
+        <div class="desc" id="desc-box">
+            <h3 id="desc-title" style="margin:0 0 10px 0;"></h3>
+            <p id="desc-text" style="margin:0; color:#ccc;"></p>
+        </div>
+    </div>
+
+    <script>
+        // 元素映射
+        const ui = {
+            wires: {
+                bpSrc: document.getElementById('w-bp-src'),
+                maint: document.getElementById('w-maint'),
+                bpPath: document.getElementById('w-bp-path'),
+                mains: document.getElementById('w-mains'),
+                dc: document.getElementById('w-dc'),
+                bat: document.getElementById('w-bat'),
+                invOut: document.getElementById('w-inv-out'),
+                load: document.getElementById('w-load')
+            },
+            arrows: {
+                bpIn: document.getElementById('a-bp-in'),
+                maint: document.getElementById('a-maint'),
+                bpSts: document.getElementById('a-bp-sts'),
+                mains: document.getElementById('a-mains'),
+                dc: document.getElementById('a-dc'),
+                batChg: document.getElementById('a-bat-chg'),
+                batDis: document.getElementById('a-bat-dis'),
+                inv: document.getElementById('a-inv'),
+                load: document.getElementById('a-load')
+            },
+            swMaint: document.getElementById('sw-maint'),
+            swSts: document.getElementById('sw-sts'),
+            descTitle: document.getElementById('desc-title'),
+            descText: document.getElementById('desc-text'),
+            descBox: document.getElementById('desc-box')
+        };
+
+        function reset() {
+            for(let k in ui.wires) ui.wires[k].setAttribute('class', 'wire');
+            for(let k in ui.arrows) {
+                ui.arrows[k].classList.add('arrow-hidden');
+                ui.arrows[k].classList.remove('fill-mains','fill-battery','fill-bypass','fill-maint');
+            }
+        }
+
+        function flow(wire, arrow, type, reverse=false) {
+            if(ui.wires[wire]) {
+                let cls = `wire stroke-${type}`;
+                cls += reverse ? ' dashed-flow-reverse' : ' dashed-flow';
+                ui.wires[wire].setAttribute('class', cls);
+            }
+            if(arrow && ui.arrows[arrow]) {
+                ui.arrows[arrow].classList.remove('arrow-hidden');
+                ui.arrows[arrow].classList.add(`fill-${type}`);
+            }
+        }
+
+        // 维修开关 (水平翻转)
+        function toggleMaint(closed) {
+            if(closed) {
+                ui.swMaint.setAttribute('x2', '20'); ui.swMaint.setAttribute('y2', '0'); // 闭合
+            } else {
+                ui.swMaint.setAttribute('x2', '15'); ui.swMaint.setAttribute('y2', '-15'); // 翘起
+            }
+        }
+
+        // STS 开关 (复杂逻辑：上或左)
+        function toggleSts(pos) {
+            // Output point is (720, 260)
+            // Left Input (Inv) is (620, 260)
+            // Top Input (Bypass) is (670, 220)
+            
+            const xOut = 720, yOut = 260;
+
+            if(pos === 'inv') { // 连左边
+                ui.swSts.setAttribute('x2', '620'); ui.swSts.setAttribute('y2', '260');
+            } else if (pos === 'bypass') { // 连上边
+                ui.swSts.setAttribute('x2', '670'); ui.swSts.setAttribute('y2', '220');
+            } else { // 悬空
+                ui.swSts.setAttribute('x2', '680'); ui.swSts.setAttribute('y2', '240');
+            }
+        }
+
+        function setMode(mode) {
+            document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            document.querySelector(`button[data-mode="${mode}"]`).classList.add('active');
+            
+            reset();
+
+            if(mode === 'normal') {
+                ui.descTitle.innerText = "市电模式 (Normal)";
+                ui.descTitle.style.color = "#00ff88";
+                ui.descBox.style.borderLeftColor = "#00ff88";
+                ui.descText.innerHTML = "<b>主路输入</b>为整流器供电。电流水平流过整流器和逆变器。STS 切换至左侧（逆变侧）。电池正在充电。";
+
+                flow('mains', 'mains', 'mains');
+                flow('dc', 'dc', 'mains');
+                flow('bat', 'batChg', 'mains');
+                flow('invOut', 'inv', 'mains');
+                flow('load', 'load', 'mains');
+                
+                toggleSts('inv');
+                toggleMaint(false);
+
+            } else if (mode === 'battery') {
+                ui.descTitle.innerText = "电池模式 (Battery)";
+                ui.descTitle.style.color = "#ffaa00";
+                ui.descBox.style.borderLeftColor = "#ffaa00";
+                ui.descText.innerHTML = "主路断电。<b>电池</b>放电（向上流动）。逆变器将直流转为交流供给负载。";
+
+                flow('bat', 'batDis', 'battery', true);
+                flow('dc', null, 'battery'); // 中间段
+                flow('invOut', 'inv', 'battery');
+                flow('load', 'load', 'battery');
+
+                toggleSts('inv');
+                toggleMaint(false);
+
+            } else if (mode === 'bypass') {
+                ui.descTitle.innerText = "旁路模式 (Static Bypass)";
+                ui.descTitle.style.color = "#00ccff";
+                ui.descBox.style.borderLeftColor = "#00ccff";
+                ui.descText.innerHTML = "<b>旁路输入</b>供电。电流走中层线路，从上方进入 STS。STS 切换至上侧（旁路侧）。";
+
+                flow('bpSrc', 'bpIn', 'bypass');
+                flow('bpPath', 'bpSts', 'bypass');
+                flow('load', 'load', 'bypass');
+
+                toggleSts('bypass');
+                toggleMaint(false);
+
+            } else if (mode === 'maint') {
+                ui.descTitle.innerText = "维修模式 (Maintenance)";
+                ui.descTitle.style.color = "#e040fb";
+                ui.descBox.style.borderLeftColor = "#e040fb";
+                ui.descText.innerHTML = "<b>维修开关闭合</b>。电流走最上层紫色线路，直接跨过所有模块直达负载。STS 断开，内部模块完全隔离。";
+
+                flow('bpSrc', 'bpIn', 'maint');
+                flow('maint', 'maint', 'maint');
+                // 负载线其实也是有电的，但源头是从上面下来的，这里只亮维修线即可清晰表达
+
+                toggleSts('off');
+                toggleMaint(true);
+            } else {
+                ui.descTitle.innerText = "关机";
+                ui.descTitle.style.color = "#aaa";
+                ui.descBox.style.borderLeftColor = "#aaa";
+                ui.descText.innerText = "无输出。";
+                toggleSts('off');
+                toggleMaint(false);
+            }
+        }
+
+        setMode('normal');
+
+    </script>
+</body>
+</html>
