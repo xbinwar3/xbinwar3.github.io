@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guacamole 原理演示 (自动版)</title>
+    <style>
+        :root {
+            --bg-body: #1e1e1e;
+            --panel-bg: #2d2d2d;
+            --text-color: #e0e0e0;
+            
+            /* 节点颜色定义 */
+            --c-browser: #3498db;  /* 蓝：用户端 */
+            --c-gateway: #9b59b6;  /* 紫：网关整体 */
+            --c-tomcat: #e67e22;   /* 橙：Java端 */
+            --c-guacd: #8e44ad;    /* 深紫：C端 */
+            --c-target: #e74c3c;   /* 红：目标机 */
+            
+            --packet-ws: #3498db;  /* WebSocket包 */
+            --packet-guac: #ffffff;/* Guacamole协议包 */
+            --packet-ssh: #e74c3c; /* SSH包 */
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Consolas, monospace;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        h2 { margin-bottom: 10px; color: var(--c-browser); }
+        .subtitle { font-size: 0.9rem; color: #888; margin-bottom: 40px; }
+
+        /* --- 核心舞台布局 --- */
+        .diagram-stage {
+            display: flex;
+            justify-content: space-between; /* 两端对齐 */
+            align-items: center;
+            width: 100%;
+            max-width: 1300px;
+            position: relative;
+            padding: 20px 0;
+        }
+
+        /* 通用节点样式 */
+        .node-box {
+            background: var(--panel-bg);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            border: 2px solid transparent;
+            transition: transform 0.3s, box-shadow 0.3s;
+            position: relative;
+            z-index: 10;
+        }
+
+        .node-box.active {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(255,255,255,0.15);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        .node-title {
+            font-weight: bold;
+            font-size: 1rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ip-label {
+            font-family: monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: #aaa;
+            margin-left: auto;
+        }
+
+        /* 终端屏幕模拟 */
+        .terminal {
+            background: #000;
+            color: #2ecc71;
+            font-family: 'Courier New', monospace;
+            padding: 10px;
+            border-radius: 4px;
+            height: 100px;
+            font-size: 12px;
+            overflow: hidden;
+            white-space: pre-wrap;
+            border: 1px solid #444;
+        }
+
+        /* 1. 浏览器节点 */
+        .browser-node { width: 250px; border-top: 4px solid var(--c-browser); }
+
+        /* 2. Gateway 复合节点 (核心) */
+        .gateway-wrapper {
+            flex-grow: 1;
+            margin: 0 50px;
+            background: #262626;
+            border: 2px dashed #555;
+            border-radius: 15px;
+            padding: 20px;
+            position: relative;
+            display: flex;
+            gap: 20px;
+        }
+
+        .gateway-header {
+            position: absolute;
+            top: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            padding: 2px 15px;
+            border-radius: 15px;
+            border: 1px solid #555;
+            font-size: 0.85rem;
+            color: #ccc;
+            white-space: nowrap;
+        }
+
+        .sub-node {
+            flex: 1;
+            background: #333;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            min-height: 180px;
+        }
+
+        .tomcat-part { border-top: 3px solid var(--c-tomcat); }
+        .guacd-part { border-top: 3px solid var(--c-guacd); }
+
+        /* 内部模块方块 */
+        .module {
+            background: #444;
+            margin: 5px 0;
+            padding: 8px;
+            font-size: 0.75rem;
+            text-align: center;
+            color: #ccc;
+            border-left: 3px solid #777;
+        }
+        
+        .mod-buffer {
+            background: #1a251a;
+            color: #fff;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-left-color: #2ecc71;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        .mod-buffer.flash { opacity: 1; background: #2a452a; box-shadow: 0 0 10px #2ecc71; }
+
+        /* 内部 4822 连接线 */
+        .internal-link {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 40px;
+        }
+        .link-line { width: 100%; height: 2px; background: #555; }
+
+        /* 3. 目标节点 */
+        .target-node { width: 250px; border-top: 4px solid var(--c-target); }
+
+        /* --- 动画数据包 --- */
+        .packet {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 0 10px currentColor;
+        }
+        .pkt-ws { background: var(--packet-ws); color: var(--packet-ws); }
+        .pkt-guac { background: var(--packet-guac); color: var(--packet-guac); }
+        .pkt-ssh { background: var(--packet-ssh); color: var(--packet-ssh); }
+
+        /* --- 底部控制与日志 --- */
+        .control-area {
+            margin-top: 30px;
+            text-align: center;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        button {
+            background: var(--c-browser);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            transition: all 0.2s;
+        }
+        button:hover { background: #2980b9; }
+        button:disabled { background: #555; cursor: not-allowed; }
+
+        .log-console {
+            margin-top: 20px;
+            background: #111;
+            border: 1px solid #333;
+            border-left: 5px solid var(--c-browser);
+            padding: 15px;
+            height: 120px;
+            overflow-y: auto;
+            text-align: left;
+            font-family: monospace;
+            font-size: 0.9rem;
+            border-radius: 5px;
+        }
+        
+        .log-item { margin-bottom: 5px; border-bottom: 1px solid #222; padding-bottom: 2px; }
+        .log-time { color: #666; margin-right: 10px; font-size: 0.8rem; }
+        .log-ip { color: var(--c-tomcat); font-weight: bold; margin-right: 10px; }
+        .log-msg { color: #ccc; }
+
+        /* 状态指示点 */
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; }
+
+    </style>
+</head>
+<body>
+
+    <h2>Guacamole 架构与数据流演示</h2>
+    <div class="subtitle">场景：用户 [115] 执行 `ls` 命令 -> 穿越网关 [30] -> 目标机 [103] 回显</div>
+
+    <div class="diagram-stage">
+        
+        <!-- 1. 用户 Browser -->
+        <div class="node-box browser-node" id="node-user">
+            <div class="node-title">
+                <span class="status-dot" style="background:var(--c-browser)"></span> Browser
+                <span class="ip-label">192.168.1.115</span>
+            </div>
+            <div class="terminal" id="term-user">root@box:~# <span id="cursor-user">_</span></div>
+            <div style="font-size:11px; color:#666; margin-top:5px;">Guacamole JS Client</div>
+        </div>
+
+        <!-- 2. Gateway Server (复合) -->
+        <div class="gateway-wrapper" id="node-gateway">
+            <div class="gateway-header">Guacamole Gateway (192.168.1.30)</div>
+            
+            <!-- Java/Tomcat -->
+            <div class="sub-node tomcat-part" id="sub-tomcat">
+                <div class="node-title" style="font-size:0.9rem; color:var(--c-tomcat);">Tomcat (Java)</div>
+                <div class="module">HTTP/WS Tunnel</div>
+                <div style="flex-grow:1; display:flex; align-items:center; justify-content:center; font-size:20px; color:#555;">⬇️</div>
+                <div class="module">TCP Proxy</div>
+            </div>
+
+            <!-- Internal Link -->
+            <div class="internal-link">
+                <div style="font-size:10px; color:#888; margin-bottom:2px;">4822</div>
+                <div class="link-line"></div>
+            </div>
+
+            <!-- Native/guacd -->
+            <div class="sub-node guacd-part" id="sub-guacd">
+                <div class="node-title" style="font-size:0.9rem; color:var(--c-guacd);">guacd (C/C++)</div>
+                <div class="module">SSH Plugin</div>
+                <div class="module mod-buffer" id="virtual-display">Virtual Display<br>[RAM Buffer]</div>
+                <div class="module" style="margin-top:auto;">Protocol Trans</div>
+            </div>
+        </div>
+
+        <!-- 3. 目标 Target -->
+        <div class="node-box target-node" id="node-target">
+            <div class="node-title">
+                <span class="status-dot" style="background:var(--c-target)"></span> Target Host
+                <span class="ip-label">192.168.1.103</span>
+            </div>
+            <div class="terminal" id="term-target">root@box:~# <span id="cursor-target">_</span></div>
+            <div style="font-size:11px; color:#666; margin-top:5px;">SSHD Service</div>
+        </div>
+
+    </div>
+
+    <div class="control-area">
+        <button id="start-btn" onclick="runScenario()">▶️ 开始演示完整流程 (ls)</button>
+        <button id="reset-btn" onclick="location.reload()" style="display:none; background:#555;">↺ 重置</button>
+        
+        <div class="log-console" id="logger">
+            <div class="log-item"><span class="log-msg">系统就绪，等待开始...</span></div>
+        </div>
+    </div>
+
+    <script>
+        // --- 核心工具函数 ---
+        const $ = (id) => document.getElementById(id);
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+        // 日志记录
+        function log(ip, msg) {
+            const box = $('logger');
+            const time = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+            const div = document.createElement('div');
+            div.className = 'log-item';
+            div.innerHTML = `<span class="log-time">[${time}]</span><span class="log-ip">${ip}</span><span class="log-msg">${msg}</span>`;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        // 获取元素中心坐标
+        function getPos(id) {
+            const rect = $(id).getBoundingClientRect();
+            return {
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2
+            };
+        }
+
+        // 高亮节点
+        async function highlight(id, duration = 0) {
+            $(id).classList.add('active');
+            if(duration > 0) {
+                await sleep(duration);
+                $(id).classList.remove('active');
+            }
+        }
+
+        // 发送数据包动画
+        function sendPacket(fromId, toId, typeClass, duration = 1000) {
+            return new Promise(resolve => {
+                const pkt = document.createElement('div');
+                pkt.className = `packet ${typeClass}`;
+                document.body.appendChild(pkt);
+
+                const start = getPos(fromId);
+                const end = getPos(toId);
+
+                // 初始位置
+                pkt.style.left = `${start.x}px`;
+                pkt.style.top = `${start.y}px`;
+                pkt.style.display = 'block';
+
+                // 强制回流，确保 transition 生效
+                pkt.getBoundingClientRect();
+
+                pkt.style.transition = `left ${duration}ms linear, top ${duration}ms linear`;
+                pkt.style.left = `${end.x}px`;
+                pkt.style.top = `${end.y}px`;
+
+                setTimeout(() => {
+                    pkt.remove();
+                    resolve();
+                }, duration);
+            });
+        }
+
+        // 模拟打字
+        async function typeText(termId, text) {
+            const term = $(termId);
+            // 移除光标
+            const content = term.innerHTML.replace(/<span.*span>/, '');
+            term.innerHTML = content;
+            
+            for(let char of text) {
+                term.innerHTML += char;
+                await sleep(100);
+            }
+            // 加回光标
+            term.innerHTML += '<span id="cursor-' + termId.split('-')[1] + '">_</span>';
+        }
+
+        // --- 主剧本 ---
+        async function runScenario() {
+            const btn = $('start-btn');
+            btn.disabled = true;
+            btn.innerText = "演示进行中...";
+            $('logger').innerHTML = ''; // 清空日志
+
+            // 1. 用户输入
+            log("192.168.1.115", "用户在浏览器输入 'ls'...");
+            highlight('node-user');
+            await typeText('term-user', 'ls');
+            await sleep(300);
+            $('node-user').classList.remove('active');
+
+            // 2. 发送到 Tomcat
+            log("Network", "WS 传输按键指令 (Guacamole Protocol)");
+            await sendPacket('node-user', 'sub-tomcat', 'pkt-ws', 800);
+
+            // 3. Tomcat 内部处理
+            highlight('sub-tomcat');
+            log("192.168.1.30", "Tomcat: 收到 WS 数据，剥离 HTTP 头，准备转发");
+            await sleep(600);
+            $('sub-tomcat').classList.remove('active');
+
+            // 4. Tomcat -> guacd (Internal)
+            log("Localhost", "Tomcat -> guacd (TCP 4822)");
+            await sendPacket('sub-tomcat', 'sub-guacd', 'pkt-guac', 500);
+
+            // 5. guacd 处理
+            highlight('sub-guacd');
+            log("192.168.1.30", "guacd: 识别协议，加载 SSH 插件，将按键翻译为 SSH 包");
+            await sleep(800);
+            $('sub-guacd').classList.remove('active');
+
+            // 6. guacd -> Target (SSH)
+            log("Network", "发送 SSH 加密数据包 -> 103");
+            await sendPacket('sub-guacd', 'node-target', 'pkt-ssh', 800);
+
+            // 7. 目标机执行
+            highlight('node-target');
+            log("192.168.1.103", "SSHD 收到命令，执行 'ls'");
+            await typeText('term-target', 'ls'); // SSH回显
+            await sleep(400);
+            const output = '\n<span style="color:#3498db">file1.txt  config.json</span>\nroot@box:~# ';
+            $('term-target').innerHTML = $('term-target').innerHTML.replace(/<span.*span>/, '') + output + '<span id="cursor-target">_</span>';
+            log("192.168.1.103", "执行完成，产生输出文本流");
+            await sleep(800);
+            $('node-target').classList.remove('active');
+
+            // 8. 回传 (SSH)
+            log("Network", "目标机回传 SSH 文本流 -> 30");
+            await sendPacket('node-target', 'sub-guacd', 'pkt-ssh', 800);
+
+            // 9. guacd 渲染 (关键步骤)
+            highlight('sub-guacd');
+            log("192.168.1.30", "guacd: 收到文本，更新内存中的【虚拟显示器】");
+            const vDisplay = $('virtual-display');
+            vDisplay.innerHTML = "Drawing...";
+            vDisplay.classList.add('flash'); // 闪烁效果
+            await sleep(600);
+            vDisplay.innerHTML = "Image/Rect Data";
+            log("192.168.1.30", "guacd: 检测到屏幕变化，生成 Guacamole 绘图指令");
+            await sleep(600);
+            vDisplay.classList.remove('flash');
+            vDisplay.innerHTML = "Virtual Display<br>[RAM Buffer]";
+            $('sub-guacd').classList.remove('active');
+
+            // 10. guacd -> Tomcat
+            log("Localhost", "guacd -> Tomcat (TCP 4822)");
+            await sendPacket('sub-guacd', 'sub-tomcat', 'pkt-guac', 500);
+
+            // 11. Tomcat -> Browser
+            highlight('sub-tomcat', 300);
+            log("192.168.1.30", "Tomcat: 将绘图指令封装进 WebSocket");
+            await sendPacket('sub-tomcat', 'node-user', 'pkt-ws', 800);
+
+            // 12. 浏览器渲染
+            highlight('node-user');
+            log("192.168.1.115", "JS Client: 接收指令，Canvas 绘制最终画面");
+            // 浏览器显示结果
+            $('term-user').innerHTML = $('term-user').innerHTML.replace(/<span.*span>/, '') + '\n' + '<span style="color:#3498db">file1.txt  config.json</span>\nroot@box:~# <span id="cursor-user">_</span>';
+            await sleep(500);
+            $('node-user').classList.remove('active');
+
+            // 结束
+            log("Done", "流程演示结束。");
+            btn.style.display = 'none';
+            $('reset-btn').style.display = 'inline-block';
+        }
+    </script>
+</body>
+</html>
