@@ -11,8 +11,11 @@ layout: default
       <div class="entry">
         {{ post.excerpt }}
       </div>
-
+    <!-- 修改开始: 检查是否有 hide_readmore 变量 -->
+    {% unless post.hide_readmore %}
       <a href="{{ site.baseurl }}{{ post.url }}" class="read-more">Read More</a>
+    {% endunless %}
+    <!-- 修改结束 -->
     </article>
   {% endfor %}
 </div>
