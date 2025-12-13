@@ -5,6 +5,4 @@ categories: [Guacamole, Google]
 description: "来自gemini-3-pro"
 ---
 
-Guacamole 架构与数据流演示。
-
-[Guacamole Working Principle](/202512/Guacamole-Working-Principle.html)
+[Guacamole 架构与数据流演示](/202512/Guacamole-Working-Principle.html)
