@@ -1,0 +1,535 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全能加密解密工具箱 (RSA/DES/MD5/SHA + 国密 SM2/3/4)</title>
+    
+    <!-- 1. 国密库 sm-crypto (SM2, SM3, SM4) -->
+    <script src="/js/sm3.js"></script>
+    <script src="/js/sm2.js"></script>
+    <script src="/js/sm4.js"></script>
+
+    <!-- 2. 标准算法库 crypto-js (MD5, SHA1/256, DES, AES等) -->
+    <script src="/js/crypto-js.min.js"></script>
+
+    <!-- 3. RSA 库 jsencrypt -->
+    <script src="/js/jsencrypt.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --border-color: #ddd;
+            --success-color: #28a745;
+            --header-bg: #343a40;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 25px;
+            font-size: 24px;
+        }
+
+        /* 状态栏 */
+        #lib-status {
+            font-size: 12px;
+            text-align: right;
+            margin-bottom: 15px;
+            padding: 5px;
+            background: #eef;
+            border-radius: 4px;
+        }
+        .status-ok { color: green; font-weight: bold; }
+        .status-err { color: red; font-weight: bold; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 25px;
+            gap: 5px;
+        }
+
+        .tab-btn {
+            padding: 12px 20px;
+            cursor: pointer;
+            background: #f8f9fa;
+            border: 1px solid transparent;
+            border-radius: 4px 4px 0 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: var(--primary-color);
+            background-color: #e9ecef;
+        }
+
+        .tab-btn.active {
+            color: #fff;
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        /* Content */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Algorithm Sections */
+        .algo-section {
+            border: 1px solid #eee;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            background: #fff;
+        }
+        .algo-title {
+            font-size: 18px;
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+            border-bottom: 1px dashed #eee;
+            padding-bottom: 8px;
+        }
+        .sub-badge {
+            font-size: 12px;
+            background: #eee;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #555;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        /* Forms */
+        .group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 14px; }
+        
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: Consolas, Monaco, monospace;
+            font-size: 13px;
+        }
+        textarea { height: 80px; resize: vertical; }
+        
+        .result-box { background-color: #f8f9fa; color: #0056b3; }
+
+        .btn-row { margin: 15px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+        
+        button {
+            padding: 8px 16px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #0056b3; }
+        button.secondary { background-color: #6c757d; }
+        button.secondary:hover { background-color: #545b62; }
+        button.success { background-color: var(--success-color); }
+        button.success:hover { background-color: #218838; }
+
+        .note { font-size: 12px; color: #888; margin-top: 4px; }
+        .warn { color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 4px; }
+
+        /* Layout for keys */
+        .two-col { display: flex; gap: 20px; }
+        .two-col > div { flex: 1; }
+        @media (max-width: 768px) { .two-col { flex-direction: column; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="lib-status">正在检查所有算法库...</div>
+    <h1>Web 全能加密/解密工具箱</h1>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="openTab('text')">文本编码</button>
+        <button class="tab-btn" onclick="openTab('hash')">哈希摘要 (Hash)</button>
+        <button class="tab-btn" onclick="openTab('symmetric')">对称加密 (DES/SM4)</button>
+        <button class="tab-btn" onclick="openTab('asymmetric')">非对称加密 (RSA/SM2)</button>
+        <button class="tab-btn" onclick="openTab('info')">关于 SM1</button>
+    </div>
+
+    <!-- 1. 文本编码 (URL, Base64) -->
+    <div id="text" class="tab-content active">
+        <div class="algo-section">
+            <h3 class="algo-title">常用编码</h3>
+            <div class="group">
+                <label>输入:</label>
+                <textarea id="text-input" placeholder="输入文本"></textarea>
+            </div>
+            <div class="btn-row">
+                <button onclick="doUrlEncode()">URL Encode</button>
+                <button onclick="doUrlDecode()">URL Decode</button>
+                <button class="secondary" onclick="doBase64Encode()">Base64 Encode</button>
+                <button class="secondary" onclick="doBase64Decode()">Base64 Decode</button>
+            </div>
+            <div class="group">
+                <label>结果:</label>
+                <textarea id="text-output" class="result-box" readonly></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 哈希摘要 (MD5, SHA, SM3) -->
+    <div id="hash" class="tab-content">
+        <div class="algo-section">
+            <h3 class="algo-title">消息摘要 / 数字指纹</h3>
+            <div class="group">
+                <label>输入原文:</label>
+                <textarea id="hash-input" placeholder="输入要计算哈希的文本"></textarea>
+            </div>
+            <div class="btn-row">
+                <button onclick="doHash('MD5')">MD5</button>
+                <button onclick="doHash('SHA1')">SHA1</button>
+                <button onclick="doHash('SHA256')">SHA256</button>
+                <button class="success" onclick="doHash('SM3')">国密 SM3</button>
+            </div>
+            <div class="group">
+                <label>Hash 结果 (Hex):</label>
+                <textarea id="hash-output" class="result-box" readonly style="height: 60px;"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 对称加密 (DES, SM4) -->
+    <div id="symmetric" class="tab-content">
+        
+        <!-- DES Block -->
+        <div class="algo-section">
+            <h3 class="algo-title">DES <span class="sub-badge">Classic</span></h3>
+            <div class="group">
+                <label>原文 / 密文:</label>
+                <textarea id="des-input" style="height: 60px;"></textarea>
+            </div>
+            <div class="group">
+                <label>密钥 (Passphrase):</label>
+                <input type="text" id="des-key" placeholder="输入任意字符作为密钥">
+            </div>
+            <div class="btn-row">
+                <button onclick="doDESEncrypt()">DES 加密</button>
+                <button class="secondary" onclick="doDESDecrypt()">DES 解密</button>
+            </div>
+            <div class="group">
+                <label>结果:</label>
+                <textarea id="des-output" class="result-box" readonly style="height: 60px;"></textarea>
+            </div>
+        </div>
+
+        <!-- SM4 Block -->
+        <div class="algo-section">
+            <h3 class="algo-title">国密 SM4 <span class="sub-badge">China Standard</span></h3>
+            <div class="group">
+                <label>原文 / 密文:</label>
+                <textarea id="sm4-input" style="height: 60px;"></textarea>
+            </div>
+            <div class="group">
+                <label>密钥 (32位 Hex):</label>
+                <input type="text" id="sm4-key" value="0123456789abcdeffedcba9876543210" placeholder="例如：0123456789abcdeffedcba9876543210">
+                <div class="note">SM4 要求严格的 128位(32个Hex字符) 密钥</div>
+            </div>
+            <div class="btn-row">
+                <button class="success" onclick="doSM4Encrypt()">SM4 加密</button>
+                <button class="secondary" onclick="doSM4Decrypt()">SM4 解密</button>
+            </div>
+            <div class="group">
+                <label>结果:</label>
+                <textarea id="sm4-output" class="result-box" readonly style="height: 60px;"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 非对称加密 (RSA, SM2) -->
+    <div id="asymmetric" class="tab-content">
+        
+        <!-- RSA Block -->
+        <div class="algo-section">
+            <h3 class="algo-title">RSA <span class="sub-badge">Standard (PKCS#1)</span></h3>
+            <div class="btn-row">
+                <button onclick="genRSAKeys()" style="background:#6610f2; border-color:#6610f2">生成 RSA 密钥对 (1024bit)</button>
+            </div>
+            <div class="two-col">
+                <div class="group">
+                    <label>RSA 公钥:</label>
+                    <textarea id="rsa-pub" style="height:100px; font-size:11px;"></textarea>
+                </div>
+                <div class="group">
+                    <label>RSA 私钥:</label>
+                    <textarea id="rsa-priv" style="height:100px; font-size:11px;"></textarea>
+                </div>
+            </div>
+            <hr>
+            <div class="group">
+                <label>内容:</label>
+                <textarea id="rsa-input" placeholder="输入要加密的文本 或 要解密的密文"></textarea>
+            </div>
+            <div class="btn-row">
+                <button onclick="doRSAEncrypt()">RSA 公钥加密</button>
+                <button class="secondary" onclick="doRSADecrypt()">RSA 私钥解密</button>
+            </div>
+            <div class="group">
+                <textarea id="rsa-output" class="result-box" readonly style="height:80px;"></textarea>
+            </div>
+        </div>
+
+        <!-- SM2 Block -->
+        <div class="algo-section">
+            <h3 class="algo-title">国密 SM2 <span class="sub-badge">Elliptic Curve</span></h3>
+            <div class="btn-row">
+                <button class="success" onclick="genSM2Keys()">生成 SM2 密钥对</button>
+            </div>
+            <div class="two-col">
+                <div class="group">
+                    <label>SM2 公钥 (Hex):</label>
+                    <textarea id="sm2-pub" style="height:80px;"></textarea>
+                </div>
+                <div class="group">
+                    <label>SM2 私钥 (Hex):</label>
+                    <textarea id="sm2-priv" style="height:80px;"></textarea>
+                </div>
+            </div>
+            <hr>
+            <div class="group">
+                <label>内容:</label>
+                <textarea id="sm2-input" placeholder="输入要加密的文本 或 要解密的密文"></textarea>
+            </div>
+            <div class="btn-row">
+                <button class="success" onclick="doSM2Encrypt()">SM2 公钥加密</button>
+                <button class="secondary" onclick="doSM2Decrypt()">SM2 私钥解密</button>
+            </div>
+            <div class="group">
+                <textarea id="sm2-output" class="result-box" readonly style="height:80px;"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Info -->
+    <div id="info" class="tab-content">
+        <div class="warn">
+            <h3>关于 SM1 算法</h3>
+            <p>SM1 为国家密码管理主管部门审批的 SM1 分组密码算法，<strong>算法不公开</strong>，仅以 IP 核的形式存在于芯片中。</p>
+            <p>本页面仅提供基于纯软件实现的算法（SM2/SM3/SM4 以及通用标准算法）。如果需要使用 SM1，必须配合 USB Key 或加密机硬件。</p>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // --- 库状态检查 ---
+    window.onload = function() {
+        const statusEl = document.getElementById('lib-status');
+        let checks = [];
+        let missing = [];
+
+        // 检查 sm-crypto
+        if(window.sm2 && window.sm3 && window.sm4) checks.push("SM系列");
+        else missing.push("sm-crypto");
+
+        // 检查 crypto-js
+        if(window.CryptoJS) checks.push("CryptoJS (MD5/SHA/DES)");
+        else missing.push("crypto-js");
+
+        // 检查 JSEncrypt
+        if(window.JSEncrypt) checks.push("JSEncrypt (RSA)");
+        else missing.push("jsencrypt");
+
+        if(missing.length === 0) {
+            statusEl.innerHTML = '<span class="status-ok">✔ 所有加密库加载成功 (' + checks.join(", ") + ')</span>';
+        } else {
+            statusEl.innerHTML = '<span class="status-err">✘ 加载失败: ' + missing.join(", ") + '。请检查网络。</span>';
+        }
+    };
+
+    function checkLib(name) {
+        if (name === 'sm' && (!window.sm2 || !window.sm3)) return false;
+        if (name === 'crypto' && !window.CryptoJS) return false;
+        if (name === 'rsa' && !window.JSEncrypt) return false;
+        return true;
+    }
+
+    function openTab(id) {
+        document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        // Set active button style
+        const btns = document.querySelectorAll('.tab-btn');
+        for(let btn of btns) { if(btn.getAttribute('onclick').includes(id)) btn.classList.add('active'); }
+    }
+
+    // --- 1. Text ---
+    function doUrlEncode() { try{ document.getElementById('text-output').value = encodeURIComponent(document.getElementById('text-input').value); }catch(e){} }
+    function doUrlDecode() { try{ document.getElementById('text-output').value = decodeURIComponent(document.getElementById('text-input').value); }catch(e){ alert('Decode Error'); } }
+    function doBase64Encode() { try{ document.getElementById('text-output').value = window.btoa(unescape(encodeURIComponent(document.getElementById('text-input').value))); }catch(e){ alert('Error'); } }
+    function doBase64Decode() { try{ document.getElementById('text-output').value = decodeURIComponent(escape(window.atob(document.getElementById('text-input').value))); }catch(e){ alert('Base64 Error'); } }
+
+    // --- 2. Hash ---
+    function doHash(algo) {
+        const input = document.getElementById('hash-input').value;
+        if(!input) return;
+        let res = "";
+        
+        try {
+            if (algo === 'MD5') {
+                if(!checkLib('crypto')) return alert('CryptoJS 未加载');
+                res = CryptoJS.MD5(input).toString();
+            } else if (algo === 'SHA1') {
+                if(!checkLib('crypto')) return alert('CryptoJS 未加载');
+                res = CryptoJS.SHA1(input).toString();
+            } else if (algo === 'SHA256') {
+                if(!checkLib('crypto')) return alert('CryptoJS 未加载');
+                res = CryptoJS.SHA256(input).toString();
+            } else if (algo === 'SM3') {
+                if(!checkLib('sm')) return alert('SM Crypto 未加载');
+                res = window.sm3(input);
+            }
+            document.getElementById('hash-output').value = res;
+        } catch(e) {
+            document.getElementById('hash-output').value = "Error: " + e.message;
+        }
+    }
+
+    // --- 3. Symmetric (DES / SM4) ---
+    
+    // DES
+    function doDESEncrypt() {
+        if(!checkLib('crypto')) return alert('CryptoJS library not loaded');
+        const input = document.getElementById('des-input').value;
+        const key = document.getElementById('des-key').value;
+        if(!key) return alert('请输入 DES 密钥');
+        try {
+            // CryptoJS DES 默认使用 CBC, Pkcs7
+            const encrypted = CryptoJS.DES.encrypt(input, key).toString();
+            document.getElementById('des-output').value = encrypted;
+        } catch(e) { alert("DES Encrypt Error: " + e); }
+    }
+    function doDESDecrypt() {
+        if(!checkLib('crypto')) return;
+        const input = document.getElementById('des-input').value;
+        const key = document.getElementById('des-key').value;
+        if(!key) return alert('请输入 DES 密钥');
+        try {
+            const decrypted = CryptoJS.DES.decrypt(input, key).toString(CryptoJS.enc.Utf8);
+            if(!decrypted) throw new Error("解密为空，可能是密钥错误");
+            document.getElementById('des-output').value = decrypted;
+        } catch(e) { document.getElementById('des-output').value = "解密失败 (检查密钥或密文格式)"; }
+    }
+
+    // SM4
+    function doSM4Encrypt() {
+        if(!checkLib('sm')) return alert('SM Lib Error');
+        const input = document.getElementById('sm4-input').value;
+        const key = document.getElementById('sm4-key').value;
+        if(key.length !== 32) return alert('SM4 Key 必须是 32位 Hex');
+        try {
+            document.getElementById('sm4-output').value = window.sm4.encrypt(input, key);
+        } catch(e) { alert(e.message); }
+    }
+    function doSM4Decrypt() {
+        if(!checkLib('sm')) return;
+        const input = document.getElementById('sm4-input').value;
+        const key = document.getElementById('sm4-key').value;
+        try {
+            document.getElementById('sm4-output').value = window.sm4.decrypt(input, key);
+        } catch(e) { document.getElementById('sm4-output').value = "解密失败"; }
+    }
+
+    // --- 4. Asymmetric (RSA / SM2) ---
+
+    // RSA
+    function genRSAKeys() {
+        if(!checkLib('rsa')) return alert('JSEncrypt not loaded');
+        const encrypt = new JSEncrypt({default_key_size: 1024});
+        // 这是一个异步操作，但 JSEncrypt 的 getKey 也是同步调用的封装
+        // 为了避免界面卡顿，简单起见直接调用
+        encrypt.getKey(); 
+        document.getElementById('rsa-pub').value = encrypt.getPublicKey();
+        document.getElementById('rsa-priv').value = encrypt.getPrivateKey();
+    }
+    function doRSAEncrypt() {
+        if(!checkLib('rsa')) return;
+        const pub = document.getElementById('rsa-pub').value;
+        const msg = document.getElementById('rsa-input').value;
+        if(!pub || !msg) return alert('缺少公钥或内容');
+        const encrypt = new JSEncrypt();
+        encrypt.setPublicKey(pub);
+        const res = encrypt.encrypt(msg);
+        document.getElementById('rsa-output').value = res || "加密失败";
+    }
+    function doRSADecrypt() {
+        if(!checkLib('rsa')) return;
+        const priv = document.getElementById('rsa-priv').value;
+        const msg = document.getElementById('rsa-input').value;
+        if(!priv || !msg) return alert('缺少私钥或密文');
+        const decrypt = new JSEncrypt();
+        decrypt.setPrivateKey(priv);
+        const res = decrypt.decrypt(msg);
+        document.getElementById('rsa-output').value = res || "解密失败";
+    }
+
+    // SM2
+    function genSM2Keys() {
+        if(!checkLib('sm')) return;
+        const pair = window.sm2.generateKeyPairHex();
+        document.getElementById('sm2-pub').value = pair.publicKey;
+        document.getElementById('sm2-priv').value = pair.privateKey;
+    }
+    function doSM2Encrypt() {
+        if(!checkLib('sm')) return;
+        const msg = document.getElementById('sm2-input').value;
+        const pub = document.getElementById('sm2-pub').value;
+        if(!msg || !pub) return alert('缺少 SM2 公钥或内容');
+        try {
+            document.getElementById('sm2-output').value = window.sm2.doEncrypt(msg, pub, 1);
+        } catch(e) { alert(e.message); }
+    }
+    function doSM2Decrypt() {
+        if(!checkLib('sm')) return;
+        const msg = document.getElementById('sm2-input').value;
+        const priv = document.getElementById('sm2-priv').value;
+        if(!msg || !priv) return alert('缺少 SM2 私钥或密文');
+        try {
+            document.getElementById('sm2-output').value = window.sm2.doDecrypt(msg, priv, 1);
+        } catch(e) { document.getElementById('sm2-output').value = "解密失败"; }
+    }
+
+</script>
+
+</body>
+</html>
