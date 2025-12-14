@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON 专业工具 (多主题版)</title>
+    
+    <!-- CodeMirror 核心 -->
+    <link rel="stylesheet" href="/json/codemirror.min.css">
+    <link rel="stylesheet" href="/json/lint.min.css">
+    
+    <!-- ==================== 引入各种主题 CSS ==================== -->
+    <!-- 暗色系 -->
+    <link rel="stylesheet" href="/json/material-darker.min.css">
+    <link rel="stylesheet" href="/json/dracula.min.css">
+    <link rel="stylesheet" href="/json/monokai.min.css">
+    <link rel="stylesheet" href="/json/twilight.min.css">
+    <!-- 亮色系 -->
+    <link rel="stylesheet" href="/json/eclipse.min.css">
+    <link rel="stylesheet" href="/json/neo.min.css">
+
+    <style>
+        /* 定义 CSS 变量，方便 JS 动态修改实现 Light/Dark 切换 */
+        :root {
+            --bg-color: #1e1e1e;          /* 整体背景 */
+            --header-bg: #212121;         /* 顶部背景 */
+            --panel-bg: #263238;          /* 编辑器标题栏背景 */
+            --text-color: #e0e0e0;        /* 主要文字颜色 */
+            --border-color: #37474f;      /* 边框颜色 */
+            --accent-color: #82aaff;      /* 强调色(按钮/链接) */
+            --scroll-track: #1e1e1e;
+            --scroll-thumb: #424242;
+        }
+
+        /* 亮色模式的覆盖样式 */
+        body.light-mode {
+            --bg-color: #f5f5f5;
+            --header-bg: #ffffff;
+            --panel-bg: #e0e0e0;
+            --text-color: #333333;
+            --border-color: #ccc;
+            --accent-color: #007bff;
+            --scroll-track: #f0f0f0;
+            --scroll-thumb: #c1c1c1;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s, color 0.3s; /* 平滑过渡动画 */
+        }
+
+        header {
+            background-color: var(--header-bg);
+            padding: 0 20px;
+            border-bottom: 1px solid var(--border-color);
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* 下拉选择框样式 */
+        .theme-selector {
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin-right: 15px;
+            outline: none;
+        }
+
+        .actions { display: flex; gap: 10px; align-items: center; }
+
+        button {
+            background-color: transparent;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        button:hover { opacity: 0.8; }
+        button.primary { background-color: var(--accent-color); color: #fff; border: none; }
+        /* 亮色模式下 primary 按钮文字可能需要深一点，这里简化处理 */
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 90px);
+        }
+
+        .editor-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+            min-width: 0;
+        }
+        .editor-wrapper:last-child { border-right: none; }
+
+        .pane-header {
+            background-color: var(--panel-bg);
+            padding: 8px 15px;
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--text-color);
+            opacity: 0.8;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* CodeMirror 高度与字体调整 */
+        .CodeMirror {
+            height: 100%;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            background: transparent; /* 让背景由 Theme 决定 */
+        }
+
+        footer {
+            height: 30px;
+            background-color: var(--accent-color);
+            color: #fff; /* 底部固定白字，或者根据模式调整 */
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            font-size: 12px;
+            justify-content: space-between;
+        }
+        
+        /* 滚动条样式适配 */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: var(--scroll-track); }
+        ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        JSON DevTools
+    </div>
+    <div class="actions">
+        <!-- 主题选择下拉框 -->
+        <select id="themeSelect" class="theme-selector" onchange="changeTheme()">
+            <optgroup label="Dark Themes (暗色)">
+                <option value="material-darker" selected>Material Darker</option>
+                <option value="dracula">Dracula</option>
+                <option value="monokai">Monokai</option>
+                <option value="twilight">Twilight</option>
+            </optgroup>
+            <optgroup label="Light Themes (亮色)">
+                <option value="eclipse">Eclipse</option>
+                <option value="neo">Neo</option>
+                <option value="default">Default (White)</option>
+            </optgroup>
+        </select>
+
+        <button onclick="clearAll()">清空</button>
+        <button onclick="processJSON('compress')">压缩 (Encode)</button>
+        <button onclick="processJSON('format')" class="primary">格式化 (Decode)</button>
+    </div>
+</header>
+
+<div class="main-container">
+    <div class="editor-wrapper">
+        <div class="pane-header">Input JSON</div>
+        <textarea id="code-input"></textarea>
+    </div>
+    <div class="editor-wrapper">
+        <div class="pane-header">
+            Result
+            <span style="cursor: pointer; text-decoration: underline;" onclick="copyOutput()">[复制]</span>
+        </div>
+        <textarea id="code-output"></textarea>
+    </div>
+</div>
+
+<footer>
+    <div id="status-msg">就绪</div>
+    <div id="stats">Length: 0</div>
+</footer>
+
+<!-- JS 依赖 -->
+<script src="/json/codemirror.min.js"></script>
+<script src="/json/javascript.min.js"></script>
+<script src="/json/matchbrackets.min.js"></script>
+<script src="/json/active-line.min.js"></script>
+<script src="/json/jsonlint.min.js"></script>
+<script src="/json/lint.min.js"></script>
+<script src="/json/json-lint.min.js"></script>
+
+<script>
+    // 定义亮色主题列表，用于判断是否需要切换 UI 到亮色模式
+    const lightThemes = ['eclipse', 'neo', 'default'];
+
+    const editorConfig = {
+        mode: "application/json",
+        theme: "material-darker", // 默认主题
+        lineNumbers: true,
+        styleActiveLine: true,
+        matchBrackets: true,
+        lint: true,
+        indentUnit: 4
+    };
+
+    const inputEditor = CodeMirror.fromTextArea(document.getElementById("code-input"), {
+        ...editorConfig,
+        placeholder: "在此粘贴 JSON..."
+    });
+
+    const outputEditor = CodeMirror.fromTextArea(document.getElementById("code-output"), {
+        ...editorConfig,
+        readOnly: true
+    });
+
+    // 切换主题逻辑
+    function changeTheme() {
+        const selector = document.getElementById('themeSelect');
+        const theme = selector.value;
+        const body = document.body;
+
+        // 1. 设置编辑器的 Theme
+        inputEditor.setOption("theme", theme);
+        outputEditor.setOption("theme", theme);
+
+        // 2. 根据主题类型切换网页整体 UI (背景色、文字颜色)
+        if (lightThemes.includes(theme)) {
+            body.classList.add('light-mode');
+        } else {
+            body.classList.remove('light-mode');
+        }
+    }
+
+    function processJSON(type) {
+        const raw = inputEditor.getValue();
+        const statusEl = document.getElementById('status-msg');
+        
+        if (!raw.trim()) {
+            statusEl.innerText = "请输入内容";
+            return;
+        }
+
+        try {
+            const obj = JSON.parse(raw);
+            
+            // 简单统计
+            const len = Array.isArray(obj) ? obj.length : Object.keys(obj).length;
+            document.getElementById('stats').innerText = `Count: ${len} | Size: ${raw.length}B`;
+
+            if (type === 'format') {
+                outputEditor.setValue(JSON.stringify(obj, null, 4));
+            } else {
+                outputEditor.setValue(JSON.stringify(obj));
+            }
+            statusEl.innerText = "处理成功";
+        } catch (e) {
+            outputEditor.setValue("");
+            statusEl.innerText = "错误: " + e.message;
+        }
+    }
+
+    function clearAll() {
+        inputEditor.setValue("");
+        outputEditor.setValue("");
+        document.getElementById('stats').innerText = "";
+        document.getElementById('status-msg').innerText = "已清空";
+    }
+
+    function copyOutput() {
+        const val = outputEditor.getValue();
+        if(val) {
+            navigator.clipboard.writeText(val);
+            document.getElementById('status-msg').innerText = "已复制";
+        }
+    }
+</script>
+
+</body>
+</html>
