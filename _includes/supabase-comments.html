@@ -1,0 +1,76 @@
+<section id="supabase-comments" class="comments">
+    <h3>评论</h3>
+
+    <!-- 评论列表 -->
+    <ul id="comment-list">
+        <!-- 评论将通过JS动态加载到这里 -->
+    </ul>
+
+    <!-- 评论表单 -->
+    <form id="comment-form">
+        <textarea name="content" placeholder="留下您的评论..." required></textarea>
+        <button type="submit">提交评论</button>
+    </form>
+</section>
+
+<script>
+// 初始化 Supabase 客户端
+const supabaseUrl = 'https://your-project-ref.supabase.co'; // 替换为您的 Supabase URL
+const supabaseKey = 'your-anon-public-key'; // 替换为您的 anon public 密钥
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// 获取当前页面的唯一标识（例如文章Slug）
+const currentPageSlug = '{{ page.url }}'; // 使用Jekyll模板变量
+
+// 加载现有评论
+async function loadComments() {
+    const { data: comments, error } = await supabase
+        .from('comments') // 连接到你的评论表
+        .select('*')
+        .eq('post_slug', currentPageSlug) // 根据页面标识过滤
+        .order('created_at', { ascending: false }); // 按时间倒序
+
+    if (error) {
+        console.error('Error loading comments:', error);
+        return;
+    }
+
+    const commentList = document.getElementById('comment-list');
+    commentList.innerHTML = comments.map(comment => `
+        <li>
+            <strong>${comment.author_name}</strong>
+            <time>${new Date(comment.created_at).toLocaleString()}</time>
+            <p>${comment.content}</p>
+        </li>
+    `).join('');
+}
+
+// 提交新评论
+document.getElementById('comment-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const content = e.target.content.value.trim();
+
+    const newComment = {
+        post_slug: currentPageSlug,
+        author_name: '访客', // 可替换为登录用户信息
+        content: content
+    };
+
+    const { data, error } = await supabase
+        .from('comments')
+        .insert([newComment]);
+
+    if (error) {
+        console.error('Error submitting comment:', error);
+        alert('提交失败，请重试。');
+    } else {
+        // 清空表单
+        e.target.reset();
+        // 重新加载评论列表（或直接在前端添加新评论）
+        loadComments();
+    }
+});
+
+// 页面加载时获取评论
+document.addEventListener('DOMContentLoaded', loadComments);
+</script>
