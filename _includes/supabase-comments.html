@@ -45,7 +45,7 @@
 <script>
 // 初始化 Supabase 客户端
 const supabaseUrl = 'https://cdgdecnznxetiepibwom.supabase.co'; // 替换为您的 Supabase URL
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkZ2RlY256bnhldGllcGlid29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2ODM0NzYsImV4cCI6MjA4MTI1OTQ3Nn0.UHZxan0dhphcrPs5WBrnVI1fxjE6-ryYySfAOsawIxg'; // 替换为您的 anon public 密钥
+const supabaseKey = process.env.SUPABASE_KEY; // 替换为您的 anon public 密钥
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // 获取当前页面的唯一标识（例如文章Slug）
