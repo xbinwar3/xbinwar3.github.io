@@ -84,5 +84,9 @@ exclude:
   - LICENSE
   - README.md
   - CNAME
+  
+supabase:
+  url: "https://cdgdecnznxetiepibwom.supabase.co"
+  key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkZ2RlY256bnhldGllcGlid29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2ODM0NzYsImV4cCI6MjA4MTI1OTQ3Nn0.UHZxan0dhphcrPs5WBrnVI1fxjE6-ryYySfAOsawIxg"
 
 theme: jekyll-theme-hacker
