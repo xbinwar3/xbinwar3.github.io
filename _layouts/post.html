@@ -12,6 +12,7 @@ layout: default
   <div class="date">
     Written on {{ page.date | date: "%B %e, %Y" }}
   </div>
-
   {% include disqus.html %}
+  <!-- 在文章内容后引入评论功能 -->
+  {% include supabase-comments.html %}
 </article>
