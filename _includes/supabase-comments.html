@@ -1,22 +1,50 @@
+<style>
+/* 评论表单容器和评论列表容器宽度100% */
+#supabase-comments .comment-form-container,
+#supabase-comments .comment-list {
+  width: 100%;
+}
+
+/* 针对文本输入框(textarea)的宽度设置 */
+#comment-form textarea {
+  width: 100%; /* 设置宽度为100% */
+  box-sizing: border-box; /* 重要的设置：确保padding和border包含在宽度内，避免溢出 */
+  min-height: 100px; /* 设置一个最小高度 */
+  padding: 10px; /* 内边距，根据喜好调整 */
+  font-family: inherit; /* 继承父元素的字体 */
+  font-size: 1em; /* 继承父元素的字体大小 */
+  border: 1px solid #ddd; /* 边框样式 */
+  border-radius: 4px; /* 圆角 */
+  resize: vertical; /* 允许用户垂直调整大小 */
+}
+
+/* 提交按钮的样式，可根据需要调整 */
+#comment-form button[type="submit"] {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background-color: #3b82f6; /* 示例颜色 */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+</style>
+
 <section id="supabase-comments" class="comments">
-    <h3>评论</h3>
-
-    <!-- 评论列表 -->
-    <ul id="comment-list">
-        <!-- 评论将通过JS动态加载到这里 -->
-    </ul>
-
-    <!-- 评论表单 -->
-    <form id="comment-form">
-        <textarea name="content" placeholder="留下您的评论..." required></textarea>
-        <button type="submit">提交评论</button>
-    </form>
+  <!-- 您的评论表单和评论列表HTML结构在这里 -->
+  <form id="comment-form" class="comment-form-container">
+    <textarea name="content" placeholder="留下您的评论..." required></textarea>
+    <button type="submit">提交评论</button>
+  </form>
+  <ul id="comment-list" class="comment-list">
+    <!-- 评论将动态加载在这里 -->
+  </ul>
 </section>
 
 <script>
 // 初始化 Supabase 客户端
-const supabaseUrl = 'https://your-project-ref.supabase.co'; // 替换为您的 Supabase URL
-const supabaseKey = 'your-anon-public-key'; // 替换为您的 anon public 密钥
+const supabaseUrl = 'https://cdgdecnznxetiepibwom.supabase.co'; // 替换为您的 Supabase URL
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkZ2RlY256bnhldGllcGlid29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2ODM0NzYsImV4cCI6MjA4MTI1OTQ3Nn0.UHZxan0dhphcrPs5WBrnVI1fxjE6-ryYySfAOsawIxg'; // 替换为您的 anon public 密钥
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // 获取当前页面的唯一标识（例如文章Slug）
