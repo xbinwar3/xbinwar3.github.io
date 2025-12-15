@@ -5,7 +5,7 @@ permalink: /about
 ---
 [聚焦问题，萃取思路，简化行动。]({{ site.baseurl }}/)
 
-<pre>
+<pre style="text-align: center; font-family: 'Courier New', monospace; margin: 0;">
 ====================================================================
 《Slow Train》         xbin@serv00.com               U.K QUIOT
                                                     (    )
