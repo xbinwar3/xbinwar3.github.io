@@ -106,7 +106,7 @@ document.getElementById('comment-form').addEventListener('submit', async (e) => 
         post_slug: currentPageSlug,
         author_name: '访客', // 可替换为登录用户信息
         commenter_ip: commenterIP,
-        commentercontent: content
+        content: content
     };
 
     const { data, error } = await supabase
