@@ -38,6 +38,7 @@
   </form>
   <ul id="comment-list" class="comment-list">
     <!-- 评论将动态加载在这里 -->
+    
   </ul>
 </section>
 
@@ -51,37 +52,61 @@ const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 const currentPageSlug = '{{ page.url }}'; // 使用Jekyll模板变量
 
 // 加载现有评论
+// IP地址脱敏函数
+function desensitizeIP(ip) {
+  // 检查是否是有效的IPv4地址
+  const ipParts = ip.split('.');
+  if (ipParts.length === 4) {
+    // 将IP地址的第二段和第三段替换为星号，例如 "192.168.1.1" -> "192.*.*.1"
+    return `${ipParts[0]}.*.*.${ipParts[3]}`;
+  }
+  // 如果不是标准IPv4，返回原值或未知
+  return ip === 'Unknown' ? ip : 'IP Invalid';
+}
+
+// 在加载和显示评论的函数中
 async function loadComments() {
-    const { data: comments, error } = await supabase
-        .from('comments') // 连接到你的评论表
-        .select('*')
-        .eq('post_slug', currentPageSlug) // 根据页面标识过滤
-        .order('created_at', { ascending: false }); // 按时间倒序
+  const { data: comments, error } = await supabase
+    .from('comments')
+    .select('*')
+    .eq('post_slug', currentPageSlug)
+    .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error('Error loading comments:', error);
-        return;
-    }
+  if (error) {
+    console.error('Error loading comments:', error);
+    return;
+  }
 
-    const commentList = document.getElementById('comment-list');
-    commentList.innerHTML = comments.map(comment => `
-        <li>
-            <strong>${comment.author_name}</strong>
-            <time>${new Date(comment.created_at).toLocaleString()}</time>
-            <p>${comment.content}</p>
-        </li>
-    `).join('');
+  const commentList = document.getElementById('comment-list');
+  commentList.innerHTML = comments.map(comment => `
+    <li>
+      <strong>${comment.author_name}</strong>
+      <time>${new Date(comment.created_at).toLocaleString()}</time>
+      <!-- 显示脱敏后的IP -->
+      <span class="comment-ip">${desensitizeIP(comment.commenter_ip)}</span>
+      <p>${comment.content}</p>
+    </li>
+  `).join('');
 }
 
 // 提交新评论
 document.getElementById('comment-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const content = e.target.content.value.trim();
-
+    let commenterIP = '';
+    try {
+      const ipResponse = await fetch('https://api.ipify.org?format=json');
+      const ipData = await ipResponse.json();
+      commenterIP = ipData.ip;
+    } catch (error) {
+      console.error("Failed to get IP address:", error);
+      commenterIP = 'Unknown'; 
+    }
     const newComment = {
         post_slug: currentPageSlug,
         author_name: '访客', // 可替换为登录用户信息
-        content: content
+        commenter_ip: commenterIP,
+        commentercontent: content
     };
 
     const { data, error } = await supabase
