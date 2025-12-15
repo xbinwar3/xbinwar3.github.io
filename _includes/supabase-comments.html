@@ -83,7 +83,7 @@ async function loadComments() {
       <strong>${comment.author_name}</strong>
       <time>${new Date(comment.created_at).toLocaleString()}</time>
       <!-- 显示脱敏后的IP -->
-      <span class="comment-ip">${desensitizeIP(comment.commenter_ip)}</span>
+      <span class="comment-ip">[${desensitizeIP(comment.commenter_ip)}]</span>
       <p>${comment.content}</p>
     </li>
   `).join('');
