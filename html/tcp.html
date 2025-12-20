@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCP 协议全景工作台</title>
+    <style>
+        :root {
+            --primary-blue: #3b82f6;
+            --primary-green: #10b981;
+            --warning-orange: #f59e0b;
+            --danger-red: #ef4444;
+            --dark-bg: #0f172a;
+            --light-bg: #f8fafc;
+            --border-color: #e2e8f0;
+            --text-main: #334155;
+            --line-color: #cbd5e1;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f1f5f9;
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1, h2, h3 { text-align: center; color: #1e293b; }
+
+        /* =========================================
+           1. 动态调试区 (Dynamic Stage)
+           ========================================= */
+        .simulation-card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 15px -3px rgba(0,0,0,0.1);
+            padding: 25px;
+            margin-bottom: 40px;
+        }
+
+        .stage {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 280px;
+            background: var(--light-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+            padding: 0 40px;
+        }
+
+        .host {
+            width: 120px;
+            text-align: center;
+            z-index: 2;
+            padding: 15px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .icon { font-size: 3.5rem; display: block; margin-bottom: 5px; }
+        .state-display {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: monospace;
+            font-weight: bold;
+            background: #fff;
+            border: 2px solid #ccc;
+            transition: all 0.3s;
+        }
+
+        /* 传输线 */
+        .cable {
+            position: absolute;
+            top: 50%;
+            left: 160px;
+            right: 160px;
+            height: 4px;
+            background: #cbd5e1;
+            z-index: 1;
+            transform: translateY(-50%);
+        }
+
+        /* 数据包 */
+        .packet {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 50px;
+            background: var(--warning-orange);
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            box-shadow: 0 4px 8px rgba(245, 158, 11, 0.4);
+            opacity: 0;
+            z-index: 10;
+            border: 2px solid white;
+            font-weight: bold;
+        }
+
+        .controls { display: flex; justify-content: center; gap: 15px; margin: 25px 0; }
+        button {
+            padding: 12px 24px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            transition: transform 0.1s, opacity 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button:active { transform: scale(0.98); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+        .btn-handshake { background: var(--primary-blue); }
+        .btn-wave { background: var(--danger-red); }
+        .btn-reset { background: #64748b; }
+
+        /* 日志区 Grid */
+        .log-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .log-box {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 220px;
+        }
+        .log-header {
+            background: #f1f5f9;
+            padding: 10px 15px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+        }
+        .log-content {
+            padding: 10px;
+            overflow-y: auto;
+            flex: 1;
+            font-size: 0.9rem;
+        }
+        .terminal {
+            background: #1e293b;
+            color: #4ade80;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .term-line { margin-bottom: 4px; border-bottom: 1px solid #334155; padding-bottom: 2px; }
+        .term-meta { color: #94a3b8; margin-right: 8px; font-size: 0.8em; }
+
+        /* =========================================
+           2. 静态全景图 (Static Diagram - Grid Layout)
+           ========================================= */
+        .static-card {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 15px -3px rgba(0,0,0,0.1);
+        }
+
+        .diagram-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 60px;
+            justify-content: center;
+        }
+
+        .diagram-column {
+            flex: 1;
+            min-width: 400px;
+            max-width: 500px;
+        }
+
+        .diagram-title {
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--primary-blue);
+            font-weight: 800;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 核心：Grid 布局的时序图 */
+        .seq-grid {
+            display: grid;
+            /* 定义5列：Client状态 | 轴 | 消息 | 轴 | Server状态 */
+            grid-template-columns: 90px 20px 1fr 20px 90px;
+            gap: 0; 
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        /* 垂直贯穿线 */
+        .seq-grid::before, .seq-grid::after {
+            content: '';
+            position: absolute;
+            top: 40px;
+            bottom: 0;
+            width: 2px;
+            background-color: var(--line-color);
+            z-index: 0;
+        }
+        .seq-grid::before { left: 100px; } /* 左轴位置 */
+        .seq-grid::after { right: 100px; } /* 右轴位置 */
+
+        .actor-cell {
+            grid-column: span 2;
+            text-align: center;
+            font-weight: bold;
+            padding-bottom: 20px;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .actor-right { grid-column: 4 / span 2; }
+
+        .seq-row { display: contents; }
+
+        /* 
+           重点修正：状态标签样式 
+           使用了 :empty 伪类来隐藏空标签
+        */
+        .st-label {
+            align-self: center;
+            font-size: 0.75rem;
+            font-family: monospace;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: #64748b;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            white-space: nowrap;
+        }
+
+        /* 当 div 内容为空时，移除边框、背景和内边距，使其隐形 */
+        .st-label:empty {
+            border: none;
+            background: transparent;
+            padding: 0;
+        }
+
+        .st-left { justify-self: end; margin-right: 5px; }
+        .st-right { justify-self: start; margin-left: 5px; }
+
+        /* 轴上的点 */
+        .dot {
+            width: 10px;
+            height: 10px;
+            background: white;
+            border: 2px solid var(--line-color);
+            border-radius: 50%;
+            align-self: center;
+            justify-self: center;
+            z-index: 1;
+        }
+
+        /* 箭头与消息 */
+        .msg-cell {
+            position: relative;
+            align-self: center;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .arrow-line {
+            width: 100%;
+            height: 2px;
+            background-color: #64748b;
+            position: relative;
+        }
+        
+        .to-right::after {
+            content: ''; position: absolute; right: 0; top: -4px;
+            width: 0; height: 0;
+            border-left: 8px solid #64748b; border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+        }
+        .to-left::after {
+            content: ''; position: absolute; left: 0; top: -4px;
+            width: 0; height: 0;
+            border-right: 8px solid #64748b; border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+        }
+
+        .msg-text {
+            position: absolute;
+            top: -12px;
+            background: white;
+            padding: 0 8px;
+            font-size: 0.8rem;
+            color: #334155;
+            font-family: monospace;
+            border-radius: 4px;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-right: 4px;
+            font-weight: 700;
+        }
+        .b-syn { background: #dbeafe; color: #1e40af; }
+        .b-ack { background: #dcfce7; color: #166534; }
+        .b-fin { background: #fee2e2; color: #991b1b; }
+
+        .gap-row {
+            grid-column: 1 / -1;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            padding: 15px 0;
+            font-style: italic;
+        }
+
+        .info-card {
+            background: #f8fafc;
+            border-left: 4px solid var(--primary-blue);
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #475569;
+        }
+        .info-card h4 { margin: 0 0 5px 0; color: #1e293b; font-size: 1rem; }
+
+        @media (max-width: 900px) {
+            .seq-grid { grid-template-columns: 70px 15px 1fr 15px 70px; }
+            .seq-grid::before { left: 77px; }
+            .seq-grid::after { right: 77px; }
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>TCP 协议全景工作台</h1>
+    
+    <!-- ================= 动态调试区 ================= -->
+    <div class="simulation-card">
+        <h3>🔴 动态模拟与抓包调试</h3>
+        
+        <div class="stage">
+            <div class="host">
+                <span class="icon">💻</span>
+                <div>Client</div>
+                <div class="state-display" id="clientState">CLOSED</div>
+            </div>
+
+            <div class="cable"></div>
+            
+            <div class="packet" id="packet">
+                <span id="pktFlags" style="font-size:1.1em">SYN</span>
+                <span id="pktSeq" style="font-size:0.75em; font-weight:normal;">seq=0</span>
+            </div>
+
+            <div class="host">
+                <span class="icon">🖥️</span>
+                <div>Server</div>
+                <div class="state-display" id="serverState">LISTEN</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn-handshake" id="btnHandshake" onclick="runHandshake()">▶ 开始三次握手</button>
+            <button class="btn-wave" id="btnWave" onclick="runWave()" disabled>⏹ 开始四次挥手</button>
+            <button class="btn-reset" onclick="resetAll()">↻ 重置系统</button>
+        </div>
+
+        <div class="log-container">
+            <div class="log-box">
+                <div class="log-header">📋 状态流转日志</div>
+                <div class="log-content" id="logicLog">
+                    <div>> 系统就绪，等待指令...</div>
+                </div>
+            </div>
+            <div class="log-box terminal">
+                <div class="log-header" style="background:#0f172a; color:#fff;">📟 Tcpdump 实时抓包</div>
+                <div class="log-content" id="tcpdumpLog">
+                    <div class="term-line"><span class="term-meta">root@box:~#</span> tcpdump -nn -i eth0 port 80</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 静态全景图 ================= -->
+    <div class="static-card">
+        <h3>🔵 TCP 协议全生命周期图解</h3>
+        
+        <div class="diagram-section">
+            
+            <!-- 左侧：三次握手 -->
+            <div class="diagram-column">
+                <div class="diagram-title">三次握手 (Connect)</div>
+                
+                <div class="seq-grid">
+                    <!-- 表头 -->
+                    <div class="actor-cell" style="color:var(--primary-blue)">Client</div>
+                    <div class="actor-cell actor-right" style="color:var(--primary-green)">Server</div>
+
+                    <!-- Step 1 -->
+                    <div class="seq-row">
+                        <div class="st-label st-left">SYN_SENT</div>
+                        <div class="dot"></div>
+                        <div class="msg-cell">
+                            <div class="arrow-line to-right"></div>
+                            <div class="msg-text"><span class="badge b-syn">SYN</span>seq=x</div>
+                        </div>
+                        <div class="dot"></div>
+                        <div class="st-label st-right">LISTEN</div>
+                    </div>
+                    
+                    <!-- Spacer -->
+                    <div class="seq-row" style="height:20px"><div style="grid-column:1/-1"></div></div>
+
+                    <!-- Step 2 -->
+                    <div class="seq-row">
+                        <div class="st-label st-left">ESTAB</div>
+                        <div class="dot"></div>
+                        <div class="msg-cell">
+                            <div class="arrow-line to-left"></div>
+                            <div class="msg-text"><span class="badge b-syn">SYN</span><span class="badge b-ack">ACK</span>seq=y, ack=x+1</div>
+                        </div>
+                        <div class="dot"></div>
+                        <div class="st-label st-right">SYN_RCVD</div>
+                    </div>
+
+                    <!-- Spacer -->
+                    <div class="seq-row" style="height:20px"><div style="grid-column:1/-1"></div></div>
+
+                    <!-- Step 3 -->
+                    <div class="seq-row">
+                        <div class="st-label st-left"></div> <!-- 这里的空 div 现在会自动隐藏 -->
+                        <div class="dot"></div>
+                        <div class="msg-cell">
+                            <div class="arrow-line to-right"></div>
+                            <div class="msg-text"><span class="badge b-ack">ACK</span>seq=x+1, ack=y+1</div>
+                        </div>
+                        <div class="dot"></div>
+                        <div class="st-label st-right">ESTAB</div>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <h4>❓ 为什么是三次握手？</h4>
+                    <p>核心是为了<strong>防止失效的连接请求</strong>传到服务端。</p>
+                    <p style="font-size:0.85em; color:#64748b; margin-top:5px;">
+                        如果只有两次，旧的 SYN 报文滞留后到达，服务端会误以为是新连接而开启资源，但客户端不予理睬，导致服务端资源浪费。
+                    </p>
+                </div>
+            </div>
+
+            <!-- 右侧：四次挥手 -->
+            <div class="diagram-column">
+                <div class="diagram-title" style="color:var(--danger-red)">四次挥手 (Disconnect)</div>
+                
+                <div class="seq-grid">
+                    <!-- 表头 -->
+                    <div class="actor-cell" style="color:var(--primary-blue)">Client</div>
+                    <div class="actor-cell actor-right" style="color:var(--primary-green)">Server</div>
+
+                    <!-- Step 1 -->
+                    <div class="seq-row">
+                        <div class="st-label st-left">FIN_WAIT_1</div>
+                        <div class="dot"></div>
+                        <div class="msg-cell">
+                            <div class="arrow-line to-right"></div>
+                            <div class="msg-text"><span class="badge b-fin">FIN</span>seq=u</div>
+                        </div>
+                        <div class="dot"></div>
+                        <div class="st-label st-right">ESTAB</div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="seq-row" style="margin-top:20px;">
+                        <div class="st-label st-left">FIN_WAIT_2</div>
+                        <div class="dot"></div>
+                        <div class="msg-cell">
+                            <div class="arrow-line to-left"></div>
+                            <div class="msg-text"><span class="badge b-ack">ACK</span>ack=u+1</div>
+                        </div>
+                        <div class="dot"></div>
+                        <div class="st-label st-right">CLOSE_WAIT</div>
+                    </div>
+
+                    <!-- Gap -->
+                    <div class="gap-row"> ... (Server 处理剩余数据) ... </div>
+
+                    <!-- Step 3 -->
+                    <div class="seq-row">
+                        <div class="st-label st-left">TIME_WAIT</div>
+                        <div class="dot"></div>
+                        <div class="msg-cell">
+                            <div class="arrow-line to-left"></div>
+                            <div class="msg-text"><span class="badge b-fin">FIN</span>seq=w</div>
+                        </div>
+                        <div class="dot"></div>
+                        <div class="st-label st-right">LAST_ACK</div>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="seq-row" style="margin-top:20px;">
+                        <div class="st-label st-left">CLOSED</div>
+                        <div class="dot"></div>
+                        <div class="msg-cell">
+                            <div class="arrow-line to-right"></div>
+                            <div class="msg-text"><span class="badge b-ack">ACK</span>ack=w+1</div>
+                        </div>
+                        <div class="dot"></div>
+                        <div class="st-label st-right">CLOSED</div>
+                    </div>
+                </div>
+
+                <div class="info-card" style="border-left-color: var(--danger-red);">
+                    <h4>❓ 为什么 TIME_WAIT 等 2MSL？</h4>
+                    <ul style="padding-left:20px; margin:5px 0;">
+                        <li><strong>确保可靠关闭</strong>：防止最后的 ACK 丢包，服务端重发 FIN。</li>
+                        <li><strong>防混淆</strong>：让旧连接的报文在网络中彻底消失。</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 逻辑控制脚本 ---
+    const clientStateEl = document.getElementById('clientState');
+    const serverStateEl = document.getElementById('serverState');
+    const packetEl = document.getElementById('packet');
+    const pktFlagsEl = document.getElementById('pktFlags');
+    const pktSeqEl = document.getElementById('pktSeq');
+    const logicLogEl = document.getElementById('logicLog');
+    const tcpdumpLogEl = document.getElementById('tcpdumpLog');
+    
+    let cSeq = 1000, sSeq = 5000;
+    const SPEED = 2000;
+
+    function log(msg) {
+        const d = document.createElement('div');
+        d.style.marginBottom = "5px";
+        d.style.borderBottom = "1px solid #f1f5f9";
+        d.innerHTML = `Running > ${msg}`;
+        logicLogEl.appendChild(d);
+        logicLogEl.scrollTop = logicLogEl.scrollHeight;
+    }
+
+    function logDump(src, dst, flags, seq, ack) {
+        const now = new Date();
+        const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}.${Math.floor(Math.random()*999999)}`;
+        
+        let fStr = "";
+        if(flags.includes("SYN")) fStr += "S";
+        if(flags.includes("FIN")) fStr += "F";
+        if(flags.includes("ACK")) fStr += ".";
+        if(fStr === "") fStr = "."; 
+        
+        const d = document.createElement('div');
+        d.className = "term-line";
+        let info = `Flags [${fStr}], seq ${seq}, win 65535, length 0`;
+        if(ack) info += `, ack ${ack}`;
+        
+        d.innerHTML = `<span class="term-meta">${time}</span> IP ${src} > ${dst}: ${info}`;
+        tcpdumpLogEl.appendChild(d);
+        tcpdumpLogEl.scrollTop = tcpdumpLogEl.scrollHeight;
+    }
+
+    function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function sendPacket(from, flags, seqVal, ackVal) {
+        pktFlagsEl.innerText = flags;
+        let info = `seq=${seqVal}`;
+        if(ackVal) info += `\nack=${ackVal}`;
+        pktSeqEl.innerText = info;
+
+        packetEl.style.transition = 'none';
+        packetEl.style.opacity = '1';
+
+        const isClient = from === 'client';
+        packetEl.style.left = isClient ? '160px' : 'calc(100% - 160px)';
+        packetEl.style.backgroundColor = isClient ? 'var(--primary-blue)' : 'var(--primary-green)';
+
+        const sIP = isClient ? '10.0.0.1.5000' : '10.0.0.2.80';
+        const dIP = isClient ? '10.0.0.2.80' : '10.0.0.1.5000';
+        logDump(sIP, dIP, flags, seqVal, ackVal);
+
+        packetEl.offsetHeight; 
+        packetEl.style.transition = `left ${SPEED/1000 * 0.7}s cubic-bezier(0.45, 0.05, 0.55, 0.95)`;
+        packetEl.style.left = isClient ? 'calc(100% - 160px)' : '160px';
+
+        await wait(SPEED * 0.75);
+        packetEl.style.opacity = '0';
+        await wait(200);
+    }
+
+    function setState(el, state, color) {
+        el.innerText = state;
+        el.style.borderColor = color || '#ccc';
+        el.style.color = color || '#333';
+        el.style.transform = "scale(1.1)";
+        setTimeout(() => el.style.transform = "scale(1)", 300);
+    }
+
+    async function runHandshake() {
+        document.getElementById('btnHandshake').disabled = true;
+        
+        log("开始三次握手...");
+        setState(clientStateEl, "SYN_SENT", "#3b82f6");
+        await sendPacket('client', 'SYN', cSeq, null);
+        
+        setState(serverStateEl, "SYN_RCVD", "#f59e0b");
+        log("服务端收到 SYN，回复 SYN+ACK");
+        await sendPacket('server', 'SYN+ACK', sSeq, cSeq+1);
+        
+        setState(clientStateEl, "ESTABLISHED", "#10b981");
+        log("客户端连接建立 (Established)");
+        await sendPacket('client', 'ACK', cSeq+1, sSeq+1);
+        
+        setState(serverStateEl, "ESTABLISHED", "#10b981");
+        log("服务端连接建立。握手完成！");
+        
+        document.getElementById('btnWave').disabled = false;
+    }
+
+    async function runWave() {
+        document.getElementById('btnWave').disabled = true;
+        log("开始四次挥手...");
+        
+        let u = cSeq + 100, v = sSeq + 200;
+
+        setState(clientStateEl, "FIN_WAIT_1", "#f59e0b");
+        await sendPacket('client', 'FIN', u, v);
+        
+        setState(serverStateEl, "CLOSE_WAIT", "#f59e0b");
+        log("服务端收到 FIN，进入 CLOSE_WAIT，先回复 ACK");
+        await sendPacket('server', 'ACK', v, u+1);
+        
+        setState(clientStateEl, "FIN_WAIT_2", "#f59e0b");
+        log("模拟数据传输间隙...");
+        await wait(1000);
+
+        setState(serverStateEl, "LAST_ACK", "#ef4444");
+        log("服务端数据发完，发送 FIN");
+        await sendPacket('server', 'FIN', v, u+1);
+
+        setState(clientStateEl, "TIME_WAIT", "#ef4444");
+        await sendPacket('client', 'ACK', u+1, v+1);
+        
+        setState(serverStateEl, "CLOSED", "#94a3b8");
+        log("服务端关闭 (Closed)");
+        
+        log("客户端等待 2MSL...");
+        await wait(1500);
+        setState(clientStateEl, "CLOSED", "#94a3b8");
+        log("流程结束。");
+        
+        document.getElementById('btnHandshake').disabled = false;
+    }
+
+    function resetAll() { location.reload(); }
+</script>
+
+</body>
+</html>
