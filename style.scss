@@ -311,3 +311,23 @@ footer {
   margin: 0 10px;
   color: #777;
 }
+.posts:after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.pagination {
+  clear: both; /* 强制分页条换行，不跟在浮动元素后面 */
+  width: 100%;
+  overflow: hidden; /* 有时候能触发 BFC，解决高度塌陷 */
+}
+.pagination {
+  clear: both;          /* 清除浮动，防止被上文遮挡 */
+  display: block;       /* 块级显示 */
+  width: 100%;          /* 占满整行 */
+  padding: 40px 0;      /* 上下给足空间 */
+  text-align: center;   /* 居中 */
+  position: relative;   /* 相对定位 */
+  z-index: 999;         /* 层级最高，防止被 Footer 覆盖 */
+}
