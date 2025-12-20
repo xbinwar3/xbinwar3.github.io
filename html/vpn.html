@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPN 原理：加解密与内容传输</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --panel: #1e1e1e;
+            --border: #333;
+            --accent: #00bcd4;
+            --text-main: #e0e0e0;
+            --text-dim: #757575;
+            --enc-color: #ff5252;
+            --clr-color: #69f0ae;
+            --font-mono: 'Consolas', 'Monaco', monospace;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text-main);
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0 auto; /* 居中 */
+            max-width: 740px; /* 限制最大宽度 */
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-left: 1px solid #333;
+            border-right: 1px solid #333;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+
+        /* --- 顶部控制栏 --- */
+        .header {
+            padding: 10px 15px;
+            background: #252526;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        h1 { margin: 0; font-size: 16px; flex: 1; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .controls button {
+            background: #333; color: #fff; border: 1px solid #555;
+            padding: 6px 12px; cursor: pointer; border-radius: 4px;
+            transition: 0.2s; font-weight: bold; font-size: 12px;
+        }
+        .controls button.primary { background: var(--accent); color: #000; border-color: var(--accent); }
+        .controls button:hover { brightness: 1.1; transform: translateY(-1px); }
+        .controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* --- 主舞台 --- */
+        .stage {
+            flex: 1;
+            position: relative;
+            padding: 20px 10px; /* 减小内边距 */
+            display: flex;
+            justify-content: space-between; /* 均匀分布 */
+            align-items: center;
+            background-image: linear-gradient(#222 1px, transparent 1px), linear-gradient(90deg, #222 1px, transparent 1px);
+            background-size: 40px 40px;
+            overflow: hidden;
+        }
+
+        /* 物理连接线 */
+        .cable {
+            position: absolute;
+            top: 50%; left: 40px; right: 40px;
+            height: 4px; background: #333; z-index: 0;
+            border-radius: 4px;
+        }
+
+        /* 节点框 (适配 740px，宽度调小) */
+        .node {
+            width: 180px; /* 从240px缩小到180px */
+            height: 360px;
+            background: var(--panel);
+            border: 2px solid #444;
+            border-radius: 6px;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            position: relative;
+        }
+        .node-title {
+            background: #333; padding: 8px; text-align: center;
+            font-weight: bold; border-bottom: 1px solid #444; font-size: 13px;
+        }
+        
+        /* 内部层级 */
+        .space {
+            flex: 1; margin: 6px; border: 1px dashed #555;
+            border-radius: 4px; padding: 4px; position: relative;
+        }
+        .space-label {
+            position: absolute; top: -8px; left: 6px;
+            background: var(--panel); font-size: 9px; color: #888; padding: 0 4px;
+        }
+        
+        /* 组件模块 */
+        .module {
+            background: #444; margin: 4px 0; padding: 8px 4px;
+            text-align: center; font-size: 11px; border-radius: 3px;
+            border: 1px solid #555; transition: 0.3s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .module.crypto { background: #e65100; color: white; border-color: #ff9800; }
+        .module.active { box-shadow: 0 0 15px var(--accent); border-color: var(--accent); transform: scale(1.02); }
+        .module.processing { animation: pulse 0.5s infinite alternate; }
+
+        @keyframes pulse { from { opacity: 0.7; } to { opacity: 1; } }
+
+        /* 锁图标动画 */
+        .lock-icon {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            font-size: 32px; color: gold; z-index: 20;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-shadow: 0 0 10px black;
+        }
+
+        /* 数据包 */
+        .packet {
+            position: absolute; top: 50%; left: 100px; /* 初始位置 */
+            transform: translate(-50%, -50%);
+            width: 50px; height: 34px;
+            background: white; border-radius: 4px;
+            z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 0 10px white;
+            transition: left 1s ease-in-out, background 0.5s;
+        }
+        .packet.encrypted { background: var(--enc-color); box-shadow: 0 0 10px var(--enc-color); color: #fff; }
+        .packet.clear { background: var(--clr-color); box-shadow: 0 0 10px var(--clr-color); color: #000; }
+
+        /* --- 底部详情面板 --- */
+        .dashboard {
+            height: 180px; background: #181818;
+            border-top: 1px solid var(--border);
+            display: grid; grid-template-columns: 1.2fr 1fr; /* 左边稍微宽一点 */
+            flex-shrink: 0;
+        }
+        
+        /* 左侧日志 */
+        .logs { padding: 10px; overflow-y: auto; font-family: var(--font-mono); font-size: 11px; border-right: 1px solid var(--border); }
+        .log-entry { margin-bottom: 5px; opacity: 0.8; }
+        .log-entry.highlight { color: var(--accent); opacity: 1; font-weight: bold; border-left: 2px solid var(--accent); padding-left: 6px; }
+
+        /* 右侧载荷监视器 */
+        .inspector { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .insp-row { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+        .insp-label { color: var(--text-dim); }
+        .insp-val { font-family: var(--font-mono); }
+        
+        .payload-box {
+            background: black; border: 1px solid #333; padding: 8px;
+            font-family: var(--font-mono); font-size: 10px;
+            height: 50px; overflow: hidden; color: var(--clr-color);
+            transition: color 0.3s; word-break: break-all;
+        }
+        .payload-box.locked { color: var(--enc-color); }
+        
+        /* 特殊调整：中间的 Internet 云朵 */
+        .cloud-node {
+             z-index:1; border-radius:50%; width:80px; height:50px; 
+             display:flex; align-items:center; justify-content:center; 
+             background:#222; border:2px dashed #666; font-size: 10px;
+        }
+        
+        /* 特殊调整：目标节点宽度 */
+        .target-node {
+            width: 120px; /* 进一步缩小目标节点以腾出空间 */
+        }
+        
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>VPN 原理演示 (740px)</h1>
+    <div class="controls">
+        <button onclick="reset()">↺ 重置</button>
+        <button onclick="step()" id="btnStep" class="primary">▶ 下一步</button>
+        <button onclick="toggleAuto()" id="btnAuto">自动</button>
+    </div>
+</div>
+
+<div class="stage">
+    <div class="cable"></div>
+
+    <!-- 用户 -->
+    <div class="node" id="node-user">
+        <div class="node-title">Client</div>
+        <div class="lock-icon" id="lock-user">🔒</div>
+        
+        <div class="space">
+            <div class="space-label">User Space</div>
+            <div class="module" id="mod-browser">🌐 浏览器</div>
+            <div class="module crypto" id="mod-vpn-client">🔑 VPN Client</div>
+        </div>
+        <div class="space">
+            <div class="space-label">Kernel</div>
+            <div class="module" id="mod-u-tun" style="border-style:dashed">📄 tun0: 10.8.0.5</div>
+            <div class="module" id="mod-u-eth">🔌 eth0: 203.0.113.12</div>
+        </div>
+    </div>
+
+    <!-- 互联网 -->
+    <div class="cloud-node">Internet</div>
+
+    <!-- VPN服务器 -->
+    <div class="node" id="node-vpn">
+        <div class="node-title">VPN Server</div>
+        <div class="lock-icon" id="lock-vpn">🔓</div>
+
+        <div class="space">
+            <div class="space-label">User Space</div>
+            <div class="module crypto" id="mod-vpn-server">🔑 VPN Server</div>
+        </div>
+        <div class="space">
+            <div class="space-label">Kernel</div>
+            <div class="module" id="mod-v-eth">🔌 eth0: 198.51.100.22</div>
+            <div class="module" id="mod-v-tun" style="border-style:dashed">📄 tun0: 10.8.0.1</div>
+            <div class="module" id="mod-nat" style="background:#333; color:yellow;">🔀 NAT</div>
+        </div>
+    </div>
+
+    <!-- 目标 -->
+    <div class="node target-node" style="height: 200px; justify-content:center; align-items:center;">
+        <div class="node-title" style="width:100%">Target</div>
+        <div style="font-size:40px;">🏦</div>
+        <div style="font-family:monospace; font-size:10px; text-align:center;">bank.com<br>93.184.xx.xx</div>
+    </div>
+
+    <!-- 数据包实体 -->
+    <div class="packet clear" id="packet">📄</div>
+</div>
+
+<div class="dashboard">
+    <div class="logs" id="logBox">
+        <div class="log-entry">> 系统就绪。等待发起请求...</div>
+    </div>
+    <div class="inspector">
+        <div class="insp-row">
+            <span>状态: <b id="status-txt">等待中</b></span>
+            <span>协议: <b id="proto-txt">--</b></span>
+        </div>
+        <div class="insp-row">
+            <span>Src: <b id="src-ip" style="color:var(--clr-color)">--</b></span>
+            <span>Dst: <b id="dst-ip" style="color:var(--clr-color)">--</b></span>
+        </div>
+        <div style="font-size:10px; color:#888; margin-top:2px;">Payload:</div>
+        <div class="payload-box" id="payload-display">
+            [空]
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 配置与数据 ---
+    const IPs = {
+        userReal: '203.0.113.12',
+        userTun:  '10.8.0.5',
+        vpnReal:  '198.51.100.22',
+        vpnTun:   '10.8.0.1',
+        target:   '93.184.216.34'
+    };
+
+    const RealContent = {
+        req: "GET /balance HTTP/1.1\nCookie: sess=xyz\nUA: Chrome",
+        res: "HTTP/1.1 200 OK\n<h1>$$$</h1>"
+    };
+
+    const EncryptedContent = {
+        req: "7f 4a b2 91 c0 ... [AES] ... 99 a1",
+        res: "e1 00 2f 4a b2 ... [AES] ... 11 4f"
+    };
+
+    // 针对 740px 重新计算的坐标 (Visual positions)
+    // 舞台 padding 10px. 
+    // User Node (180px) -> Center = 10 + 90 = 100px
+    // Internet (Center) -> 50%
+    // VPN Node (180px) -> 右侧倒数第二个. 
+    // Target (120px) -> Right side.
+    
+    // 我们使用 calc 来适应
+    const POS = {
+        start: '100px', // User center
+        isp: '50%',
+        vpn: 'calc(100% - 170px)', // 大致对齐 VPN Server 中心
+        target: 'calc(100% - 70px)' // Target center
+    };
+
+    let stepIndex = 0;
+    let autoTimer = null;
+
+    // --- 步骤定义 ---
+    const steps = [
+        // 1. 生成请求
+        {
+            desc: "浏览器发起敏感请求",
+            action: () => {
+                movePacket(POS.start);
+                setPacketStyle('clear');
+                highlight('mod-browser');
+                updateInfo(IPs.userTun, IPs.target, RealContent.req, 'HTTP (明文)');
+                log("1. 浏览器访问银行。路由表指向 tun0。");
+            }
+        },
+        // 2. 进入内核虚拟网卡
+        {
+            desc: "内核将包推入 tun0",
+            action: () => {
+                highlight('mod-u-tun');
+                log("2. 内核：数据包进入虚拟网卡 tun0。");
+            }
+        },
+        // 3. VPN 客户端加密 (User Space)
+        {
+            desc: "VPN 客户端加密",
+            action: () => {
+                highlight('mod-vpn-client');
+                showLock('lock-user', '🔒'); // 上锁
+                setTimeout(() => {
+                    setPacketStyle('encrypted'); // 变红
+                    updateInfo(IPs.userReal, IPs.vpnReal, EncryptedContent.req, 'UDP (加密)');
+                    document.getElementById('payload-display').classList.add('locked');
+                }, 500);
+                
+                log("3. VPN 软件读取 tun0，加密 payload，封装 UDP。");
+            }
+        },
+        // 4. 发送至公网
+        {
+            desc: "公网传输 (隧道)",
+            action: () => {
+                hideLock('lock-user');
+                highlight('mod-u-eth');
+                setTimeout(() => { movePacket(POS.isp); highlight(null); }, 300);
+                log("4. 物理网卡发送。ISP 只能看到乱码 UDP 包。");
+            }
+        },
+        // 5. VPN 服务端接收
+        {
+            desc: "VPN 服务端解密",
+            action: () => {
+                movePacket(POS.vpn);
+                setTimeout(() => {
+                    highlight('mod-v-eth');
+                    setTimeout(() => highlight('mod-vpn-server'), 500);
+                }, 1000);
+            }
+        },
+        // 6. 解密动作
+        {
+            desc: "还原明文",
+            action: () => {
+                showLock('lock-vpn', '🔓'); // 开锁
+                setTimeout(() => {
+                    setPacketStyle('clear'); // 变绿
+                    updateInfo(IPs.userTun, IPs.target, RealContent.req, 'HTTP (还原)');
+                    document.getElementById('payload-display').classList.remove('locked');
+                }, 500);
+                log("5. VPN 服务端解密，还原原始 HTTP 请求。");
+            }
+        },
+        // 7. NAT 转发
+        {
+            desc: "NAT 源地址伪装",
+            action: () => {
+                hideLock('lock-vpn');
+                highlight('mod-nat');
+                setTimeout(() => {
+                    updateInfo(IPs.vpnReal, IPs.target, RealContent.req, 'HTTP (NAT后)');
+                    document.getElementById('src-ip').style.color = 'yellow'; // 提示变化
+                }, 500);
+                log("6. SNAT: 源 IP 变为服务器公网 IP，以便回信。");
+            }
+        },
+        // 8. 到达目标
+        {
+            desc: "到达银行服务器",
+            action: () => {
+                movePacket(POS.target);
+                highlight(null);
+                log("7. 银行收到请求，处理业务...");
+            }
+        },
+        // --- 回程 ---
+        {
+            desc: "银行回传数据",
+            action: () => {
+                updateInfo(IPs.target, IPs.vpnReal, RealContent.res, 'HTTP (响应)');
+                log("8. 银行回传数据给 VPN 服务器。");
+            }
+        },
+        // 9. 回到 VPN 服务器
+        {
+            desc: "VPN 接收回包 & DNAT",
+            action: () => {
+                movePacket(POS.vpn);
+                setTimeout(() => {
+                    highlight('mod-nat');
+                    updateInfo(IPs.target, IPs.userTun, RealContent.res, 'HTTP (DNAT)');
+                    document.getElementById('dst-ip').style.color = 'yellow';
+                }, 800);
+                log("9. VPN 服务器收到回包。DNAT 还原目的 IP 为用户内网 IP。");
+            }
+        },
+        // 10. 加密回包
+        {
+            desc: "VPN 加密回传",
+            action: () => {
+                highlight('mod-vpn-server');
+                showLock('lock-vpn', '🔒');
+                setTimeout(() => {
+                    setPacketStyle('encrypted');
+                    updateInfo(IPs.vpnReal, IPs.userReal, EncryptedContent.res, 'UDP (加密)');
+                    document.getElementById('payload-display').classList.add('locked');
+                }, 500);
+                log("10. 再次加密，封装 UDP 发回给用户。");
+            }
+        },
+        // 11. 公网回程
+        {
+            desc: "公网回程",
+            action: () => {
+                hideLock('lock-vpn');
+                movePacket(POS.isp);
+                highlight(null);
+                log("11. 加密数据包穿过互联网。");
+            }
+        },
+        // 12. 用户解密
+        {
+            desc: "用户端解密",
+            action: () => {
+                movePacket(POS.start);
+                setTimeout(() => {
+                    highlight('mod-vpn-client');
+                    showLock('lock-user', '🔓'); // 开锁
+                }, 800);
+                
+                setTimeout(() => {
+                    setPacketStyle('clear');
+                    updateInfo(IPs.target, IPs.userTun, RealContent.res, 'HTTP (完成)');
+                    document.getElementById('payload-display').classList.remove('locked');
+                    hideLock('lock-user');
+                    highlight('mod-browser');
+                }, 1500);
+                
+                log("12. 客户端解密。浏览器显示内容。流程结束。");
+            }
+        }
+    ];
+
+    // --- 辅助函数 ---
+
+    function highlight(id) {
+        document.querySelectorAll('.module').forEach(el => el.classList.remove('active', 'processing'));
+        if(id) {
+            const el = document.getElementById(id);
+            if(el) {
+                el.classList.add('active');
+                if(id.includes('vpn') || id.includes('nat')) el.classList.add('processing');
+            }
+        }
+    }
+
+    function movePacket(leftVal) {
+        const p = document.getElementById('packet');
+        p.style.opacity = 1;
+        p.style.left = leftVal;
+    }
+
+    function setPacketStyle(type) {
+        const p = document.getElementById('packet');
+        if(type === 'encrypted') {
+            p.className = 'packet encrypted';
+            p.innerHTML = '🔒';
+        } else {
+            p.className = 'packet clear';
+            p.innerHTML = '📄';
+        }
+    }
+
+    function updateInfo(src, dst, content, proto) {
+        document.getElementById('src-ip').innerText = src;
+        document.getElementById('src-ip').style.color = ''; // reset
+        document.getElementById('dst-ip').innerText = dst;
+        document.getElementById('dst-ip').style.color = ''; // reset
+        
+        const box = document.getElementById('payload-display');
+        box.innerText = content;
+        
+        document.getElementById('proto-txt').innerText = proto;
+    }
+
+    function log(msg) {
+        const box = document.getElementById('logBox');
+        const div = document.createElement('div');
+        div.className = 'log-entry highlight';
+        div.innerHTML = msg;
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function showLock(id, icon) {
+        const el = document.getElementById(id);
+        el.innerText = icon;
+        el.style.transform = 'translate(-50%, -50%) scale(1)';
+    }
+
+    function hideLock(id) {
+        const el = document.getElementById(id);
+        el.style.transform = 'translate(-50%, -50%) scale(0)';
+    }
+
+    // --- 控制逻辑 ---
+
+    function step() {
+        if(stepIndex < steps.length) {
+            document.getElementById('status-txt').innerText = steps[stepIndex].desc;
+            steps[stepIndex].action();
+            stepIndex++;
+        } else {
+            reset();
+        }
+        
+        const btn = document.getElementById('btnStep');
+        btn.innerText = (stepIndex >= steps.length) ? "↺ 重置" : "▶ 下一步";
+    }
+
+    function reset() {
+        stepIndex = 0;
+        document.getElementById('logBox').innerHTML = '<div class="log-entry">> 系统已重置。</div>';
+        document.getElementById('packet').style.opacity = 0;
+        document.getElementById('packet').style.left = POS.start;
+        highlight(null);
+        hideLock('lock-user');
+        hideLock('lock-vpn');
+        document.getElementById('payload-display').innerText = "[空]";
+        document.getElementById('btnStep').innerText = "▶ 下一步";
+    }
+
+    function toggleAuto() {
+        const btn = document.getElementById('btnAuto');
+        if(autoTimer) {
+            clearInterval(autoTimer);
+            autoTimer = null;
+            btn.innerText = "自动";
+            document.getElementById('btnStep').disabled = false;
+        } else {
+            btn.innerText = "暂停";
+            document.getElementById('btnStep').disabled = true;
+            if(stepIndex === 0) step();
+            autoTimer = setInterval(() => {
+                if(stepIndex < steps.length) {
+                    step();
+                } else {
+                    toggleAuto();
+                }
+            }, 2500);
+        }
+    }
+
+    reset();
+
+</script>
+</body>
+</html>
