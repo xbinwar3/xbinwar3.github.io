@@ -7,4 +7,11 @@ categories: [TCP/IP, Packet,NIC,DMA,用户态,内核态]
 一个数据包的“一生”。
 
 <!-- 直接嵌入您的HTML地图 -->
-<iframe src="/html/packet.html" width="100%"  frameborder="0" ></iframe>
+<iframe 
+    src="/html/packet.html" 
+    width="100%" 
+    frameborder="0" 
+    scrolling="no" 
+    style="display: block; width: 100%; border: none; overflow-y: hidden;"
+    onload="this.style.height = this.contentWindow.document.documentElement.scrollHeight + 'px';"
+></iframe>
