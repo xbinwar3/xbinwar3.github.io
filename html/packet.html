@@ -3,674 +3,530 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>网络传输：内存与硬件</title>
+    <title>物理内存全景视图 (740px版)</title>
     <style>
         :root {
-            /* 颜色定义 */
-            --bg-user: #e3f2fd;
-            --bg-ram: #fff8e1; /* 内存背景：淡黄 */
-            --border-ram: #ffa000; /* 内存边框：橙色 */
-            --bg-hw: #eceff1;
-            
-            --col-tx: #4caf50; /* 发送流：绿 */
-            --col-rx: #2196f3; /* 接收流：蓝 */
-            
-            --hdr-tcp: #1976d2;
-            --hdr-ip: #f57c00;
-            --hdr-mac: #7b1fa2;
+            --ram-border: #795548;
+            --ram-bg: #fff3e0;
+            --user-bg: #e1f5fe;
+            --kernel-bg: #ffe0b2;
+            --hw-bg: #263238;
+            --tx-color: #2e7d32;
+            --rx-color: #1565c0;
         }
 
         body {
-            font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-            background-color: #fafafa;
-            margin: 0;
-            padding: 20px;
+            font-family: 'Segoe UI', sans-serif;
+            background: #f5f5f5;
             display: flex;
             flex-direction: column;
             align-items: center;
+            margin: 0;
+            padding: 10px;
+            /* 核心限制：最大宽度 740px */
+            max-width: 740px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
-        /* 顶部控制栏 */
-        .controls-container {
+        /* 顶部控制栏 - 适配窄屏 */
+        .controls {
             background: white;
-            padding: 15px 25px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            width: 1080px;
-            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            width: 100%;
+            box-sizing: border-box; /* 确保内边距不撑大 */
+            display: flex;
+            flex-wrap: wrap; /* 允许换行 */
+            gap: 8px;
+            margin-bottom: 15px;
             z-index: 1000;
+            justify-content: center;
         }
-
-        .btn-row {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 12px;
-        }
-
+        
         button {
-            padding: 10px 18px;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 14px;
+            padding: 6px 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; font-size: 13px;
+            flex-grow: 1; /* 按钮自动填满 */
         }
-        button:active { transform: scale(0.96); }
-        button:disabled { background-color: #eee; color: #aaa; cursor: not-allowed; }
+        .btn-tx { background: var(--tx-color); }
+        .btn-rx { background: var(--rx-color); }
+        .btn-step { background: #f57c00; }
+        .btn-reset { background: #78909c; }
+        button:disabled { background: #ddd; color: #aaa; }
 
-        .btn-tx { background-color: var(--col-tx); color: white; }
-        .btn-tx:hover { background-color: #388e3c; }
-        .btn-rx { background-color: var(--col-rx); color: white; }
-        .btn-rx:hover { background-color: #1565c0; }
-        .btn-step { background-color: #ff9800; color: white; min-width: 120px; }
-        .btn-reset { background-color: #78909c; color: white; margin-left: auto; }
-
-        .info-panel {
-            background: #263238;
-            color: #fff;
-            padding: 10px 15px;
-            border-radius: 6px;
-            font-family: Consolas, monospace;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .status {
+            font-family: monospace; color: #333; font-size: 12px;
+            width: 100%; text-align: center; margin-top: 5px;
         }
-        .info-highlight { color: #ffff00; font-weight: bold; margin-left: 10px; }
 
-        /* 主舞台 */
+        /* 主舞台 - 锁定宽度 */
         .stage {
             position: relative;
-            width: 1100px;
-            height: 800px;
-            background: white;
-            border: 1px solid #ccc;
-            box-shadow: 0 5px 25px rgba(0,0,0,0.05);
-            display: grid;
-            grid-template-rows: 120px 480px 200px; /* User, RAM/Kernel, HW */
-            overflow: hidden;
+            width: 100%; /* 填满 740px */
+            height: 700px; /* 高度适当减小 */
         }
 
-        /* 区域标签 */
-        .zone-label {
+        /* =========================================
+           1. 物理内存容器
+           ========================================= */
+        #phys-ram {
             position: absolute;
-            top: 5px; left: 10px;
-            font-size: 12px; font-weight: bold; color: #90a4ae;
-            text-transform: uppercase; pointer-events: none;
-        }
-
-        /* 1. 用户空间 */
-        #zone-user { background-color: var(--bg-user); position: relative; border-bottom: 1px dashed #ccc; }
-        
-        #app-box {
-            position: absolute; top: 35px; left: 50px;
-            width: 140px; height: 60px;
-            background: white; border: 2px solid #0288d1; border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: bold; color: #0277bd;
-        }
-
-        /* 2. 内核与内存空间 (核心区域) */
-        #zone-kernel { background-color: #fff; position: relative; }
-
-        /* 巨大的 RAM 容器 */
-        .ram-container {
-            position: absolute;
-            top: 20px; left: 40px; right: 40px; bottom: 20px;
-            background-color: var(--bg-ram);
-            border: 3px solid var(--border-ram);
+            top: 0; left: 0; right: 0; height: 480px;
+            border: 4px solid var(--ram-border);
+            background: var(--ram-bg);
             border-radius: 12px;
-            box-shadow: inset 0 0 20px rgba(255, 160, 0, 0.1);
+            box-shadow: 0 5px 20px rgba(121, 85, 72, 0.15);
+            overflow: hidden;
+            box-sizing: border-box;
         }
-        .ram-tag {
+
+        .ram-label {
             position: absolute; top: 0; left: 0;
-            background: var(--border-ram); color: white;
-            padding: 4px 12px; border-bottom-right-radius: 12px;
-            font-weight: bold; font-size: 14px;
+            background: var(--ram-border); color: white;
+            padding: 2px 10px; border-bottom-right-radius: 8px;
+            font-weight: bold; font-size: 12px; z-index: 5;
         }
 
-        /* RAM 内部布局 */
-        .ram-layout {
-            display: flex; height: 100%; padding: 40px 20px 20px 20px; box-sizing: border-box;
-            justify-content: space-between;
+        /* 用户态区域 */
+        #area-user {
+            height: 140px;
+            background: var(--user-bg);
+            border-bottom: 2px dashed #b0bec5;
+            position: relative;
+        }
+        .area-label {
+            position: absolute; top: 5px; right: 10px;
+            font-weight: bold; color: rgba(0,0,0,0.3); font-size: 12px; text-transform: uppercase;
         }
 
-        /* 协议栈代码区 (逻辑) */
-        .stack-section {
-            width: 30%; border: 1px dashed #bdbdbd; border-radius: 8px;
-            padding: 10px; background: rgba(255,255,255,0.6);
-            display: flex; flex-direction: column; align-items: center; gap: 15px;
+        /* 内核态区域 */
+        #area-kernel {
+            height: 340px;
+            background: var(--kernel-bg);
+            position: relative;
+            display: flex;
+            padding: 15px 5px; /* 减小内边距 */
+            justify-content: space-around; /* 自动分配空间 */
+            align-items: flex-start;
         }
-        .section-title { font-size: 12px; color: #795548; font-weight: bold; margin-bottom: 5px; text-align: center; }
         
-        .stack-layer {
-            width: 90%; height: 50px; background: white; border: 2px solid #9e9e9e;
-            border-radius: 6px; display: flex; align-items: center; justify-content: center;
-            font-size: 13px; font-weight: bold; color: #555; position: relative;
-            transition: all 0.3s;
+        .boundary-text {
+            position: absolute; top: 128px; left: 50%; transform: translateX(-50%);
+            background: #fff; padding: 0 8px; font-size: 10px; color: #78909c;
+            border-radius: 8px; border: 1px solid #b0bec5; z-index: 2;
         }
-        .stack-active { transform: scale(1.05); box-shadow: 0 0 10px gold; border-color: gold; }
 
-        /* 数据缓冲区 (Socket Buffer) */
-        .data-section {
-            width: 30%; border: 1px dashed #bdbdbd; border-radius: 8px;
-            padding: 10px; background: rgba(255,255,255,0.6);
-            display: flex; flex-direction: column; align-items: center;
-        }
-        #skb-area {
-            width: 90%; height: 150px; margin-top: 50px;
-            border: 2px dashed #8d6e63; background: #efebe9;
+        /* 组件样式 */
+        .box {
+            background: white; border: 2px solid #555; border-radius: 6px;
             display: flex; align-items: center; justify-content: center;
-            color: #8d6e63; font-size: 13px; text-align: center;
+            font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
 
-        /* Ring Buffer (在内存中) */
-        .ring-section {
-            width: 30%; border: 1px dashed #bdbdbd; border-radius: 8px;
-            padding: 10px; background: rgba(255,255,255,0.6);
+        /* App 在用户态内存中 - 居中 */
+        #app-mem {
+            position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
+            width: 140px; height: 60px;
+            border-color: #039be5; color: #0277bd; font-size: 13px;
+        }
+        .mem-addr { font-size: 9px; color: #999; position: absolute; top: 1px; left: 3px; }
+
+        /* 内核组件布局 - 宽度自适应 */
+        .k-group {
+            width: 31%; /* 三个并排 */
+            border: 1px dotted #8d6e63; border-radius: 8px;
+            padding: 8px 4px; 
             display: flex; flex-direction: column; align-items: center;
+            background: rgba(255,255,255,0.4);
+            box-sizing: border-box;
         }
-        #ring-buffer-box {
-            width: 90%; height: 250px; background: white; border: 2px solid #607d8b;
-            border-radius: 6px; padding: 10px; position: relative;
-        }
-        .descriptor {
-            height: 35px; background: #eceff1; margin-bottom: 8px; border: 1px solid #cfd8dc;
-            display: flex; align-items: center; justify-content: center; font-size: 11px; color: #90a4ae;
-        }
-        .desc-active { background: #ffeb3b; border-color: #fdd835; color: #f57f17; font-weight: bold; }
+        .k-title { font-size: 11px; color: #5d4037; margin-bottom: 8px; font-weight: bold; text-align: center; }
 
-        /* 3. 硬件层 */
-        #zone-hw { background-color: var(--bg-hw); position: relative; border-top: 1px solid #ccc; }
-
-        #nic-board {
-            position: absolute; top: 30px; left: 200px;
-            width: 500px; height: 140px;
-            background: #263238; border: 4px solid #000; border-radius: 10px;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-            display: flex; align-items: center; justify-content: space-around;
-            color: white; padding: 0 20px;
+        /* 协议栈代码段 */
+        .stack-layer {
+            width: 95%; height: 35px; border: 1px solid #aaa; background: white;
+            margin-bottom: 5px; display: flex; align-items: center; justify-content: center;
+            font-size: 11px; transition: all 0.2s;
         }
-        .nic-label { position: absolute; top: 5px; left: 10px; font-size: 12px; color: #90a4ae; }
+        .active-code { background: #fffde7; border-color: #fdd835; box-shadow: 0 0 8px #fdd835; transform: scale(1.02); }
 
-        /* 网卡内部组件 */
-        .nic-component {
-            border: 1px solid #546e7a; background: #37474f; border-radius: 4px;
-            display: flex; align-items: center; justify-content: center; flex-direction: column;
+        /* Ring Buffer */
+        #ring-box {
+            width: 95%; height: 140px; background: white; border: 2px solid #5d4037;
+            border-radius: 4px; padding: 4px; position: relative;
+        }
+        .desc { height: 25px; border-bottom: 1px solid #eee; display: flex; align-items: center; font-size: 10px; padding-left: 2px; color: #888; overflow: hidden; white-space: nowrap; }
+        .desc.active { background: #fff59d; color: #f57f17; font-weight: bold; }
+
+        /* Socket Buffer */
+        #skb-box {
+            width: 95%; height: 100px; border: 2px dashed #8d6e63; background: #efebe9;
+            display: flex; align-items: center; justify-content: center; font-size: 11px; color: #795548;
             text-align: center;
         }
-        
-        #dma-engine { width: 80px; height: 60px; font-size: 12px; font-weight: bold; }
-        
-        /* 关键：网卡片上内存 */
-        #nic-sram {
-            width: 120px; height: 90px; border: 2px solid #00e676; /* 亮绿框 */
-            background: #1b5e20; 
-            font-size: 11px;
+
+        /* =========================================
+           2. 硬件层 - 适配窄宽度
+           ========================================= */
+        #hardware {
+            position: absolute; bottom: 10px; left: 0; right: 0; height: 160px;
+            background: var(--hw-bg);
+            border-radius: 12px;
+            border: 3px solid #000;
+            color: white;
+            box-sizing: border-box;
+        }
+        .hw-label {
+            position: absolute; top: 5px; left: 10px; font-weight: bold; font-size: 11px; color: #90a4ae;
         }
 
-        #phy-chip { width: 60px; height: 60px; font-size: 12px; }
+        #nic-chip {
+            position: absolute; top: 35px; 
+            /* 居中处理 */
+            left: 50%; transform: translateX(-50%);
+            width: 90%; /* 占 90% 宽度 */
+            height: 90px;
+            border: 2px solid #455a64; background: #37474f;
+            display: flex; align-items: center; justify-content: space-around;
+            border-radius: 8px;
+        }
+        
+        #nic-sram {
+            width: 35%; /* 比例宽度 */
+            height: 60px;
+            border: 2px solid #00e676; background: #1b5e20;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 10px; text-align: center;
+        }
 
         #cable {
-            position: absolute; top: 90px; right: 50px;
-            width: 300px; height: 10px; background: #333; border-radius: 5px;
+            position: absolute; top: 75px; right: -10px; width: 60px; height: 8px; background: #111;
         }
 
-        /* 驱动程序 (介于软硬之间，画在内存和硬件中间的逻辑位置，或者内存旁边) 
-           这里为了清晰，我们假设驱动代码在内存，但有一个逻辑实体操作 Ring */
-        #driver-pointer {
-            position: absolute; bottom: 230px; right: 180px;
-            font-size: 12px; color: #d84315; font-weight: bold;
-            display: none; z-index: 50;
+        /* 总线箭头 - 自动居中 */
+        .bus-arrow {
+            position: absolute; 
+            left: 50%; transform: translateX(-50%); /* 居中 */
+            top: 485px; height: 40px; width: 4px; background: #bbb;
         }
 
-        /* ==================== 
-           动态数据包 
-           ==================== */
+        /* 移动的数据包 */
         #packet {
             position: absolute;
-            width: 80px; height: 40px;
-            background: var(--col-tx);
-            color: white; border-radius: 4px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 12px; font-weight: bold;
+            width: 70px; height: 36px; /* 稍微缩小 */
+            background: var(--tx-color); color: white;
+            border-radius: 4px; display: flex; align-items: center; justify-content: center;
+            font-size: 11px; z-index: 999; opacity: 0;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            z-index: 999; /* 最顶层 */
-            opacity: 0;
-            transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
-        .header-cell {
-            width: 18px; height: 100%; border-right: 1px solid rgba(255,255,255,0.3);
-            display: flex; align-items: center; justify-content: center;
-            writing-mode: vertical-rl; font-size: 10px;
-        }
-
-        /* 连线/路径指示 (SVG) */
-        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; }
-        .flow-arrow { stroke: red; stroke-width: 2; fill: none; stroke-dasharray: 5,5; opacity: 0; transition: opacity 0.5s; }
+        .hdr { width: 12px; height: 100%; border-right: 1px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center; writing-mode: vertical-rl; font-size: 8px;}
 
     </style>
 </head>
 <body>
 
-<div class="controls-container">
-    <div class="btn-row">
-        <button class="btn-tx" onclick="setupMode('TX')">1. 准备发送 (TX)</button>
-        <button class="btn-rx" onclick="setupMode('RX')">2. 准备接收 (RX)</button>
-        <div style="width: 20px; border-right:1px solid #eee;"></div>
-        <button class="btn-step" id="btn-next" onclick="nextStep()" disabled>➡ 执行下一步</button>
-        <button onclick="autoPlay()" style="background:#5c6bc0; color:white;">▶ 自动播放</button>
-        <button class="btn-reset" onclick="resetAll()">↻ 重置</button>
-    </div>
-    <div class="info-panel">
-        <span id="status-text">请选择模式以开始演示...</span>
-        <span id="step-indicator">Step: 0/0</span>
-    </div>
+<div class="controls">
+    <button class="btn-tx" onclick="setMode('TX')">TX 发送</button>
+    <button class="btn-rx" onclick="setMode('RX')">RX 接收</button>
+    <button class="btn-step" id="btn-next" onclick="next()" disabled>➡ 下一步</button>
+    <button onclick="autoPlay()" style="background:#5c6bc0;">▶ 播放</button>
+    <button class="btn-reset" onclick="reset()">重置</button>
+    <div class="status" id="status-text">准备就绪</div>
 </div>
 
 <div class="stage">
-    
-    <!-- User Zone -->
-    <div id="zone-user">
-        <div class="zone-label">User Space (用户态)</div>
-        <div id="app-box">Application<br>(Browser)</div>
-    </div>
 
-    <!-- Kernel / RAM Zone -->
-    <div id="zone-kernel">
-        <div class="zone-label">Kernel Space (内核态)</div>
+    <!-- 1. 物理内存 (统一容器) -->
+    <div id="phys-ram">
+        <div class="ram-label">Physical RAM (内存条)</div>
         
-        <div class="ram-container">
-            <div class="ram-tag">System RAM (本机物理内存)</div>
-            
-            <div class="ram-layout">
-                <!-- 1. 协议栈代码逻辑 -->
-                <div class="stack-section">
-                    <div class="section-title">Protocol Stack Logic<br>(CPU Instructions)</div>
-                    <div class="stack-layer" id="layer-tcp">TCP Layer</div>
-                    <div class="stack-layer" id="layer-ip">IP Layer</div>
-                    <div class="stack-layer" id="layer-mac">MAC Layer</div>
-                </div>
-
-                <!-- 2. 数据缓冲区 -->
-                <div class="data-section">
-                    <div class="section-title">Data Storage<br>(Socket Buffers)</div>
-                    <div id="skb-area">
-                        sk_buff Area<br>
-                        (Data resides here)
-                    </div>
-                </div>
-
-                <!-- 3. Ring Buffer -->
-                <div class="ring-section">
-                    <div class="section-title">DMA Descriptors<br>(Ring Buffer)</div>
-                    <div id="ring-buffer-box">
-                        <div class="descriptor" id="desc-0">Desc [Addr, Len]</div>
-                        <div class="descriptor" id="desc-1">Desc [Addr, Len]</div>
-                        <div class="descriptor" id="desc-2">Desc [Addr, Len]</div>
-                        <div class="descriptor" id="desc-3">Desc [Addr, Len]</div>
-                    </div>
-                </div>
+        <!-- 用户态 -->
+        <div id="area-user">
+            <div class="area-label">User Space</div>
+            <div class="box" id="app-mem">
+                <span class="mem-addr">0x7F..</span>
+                App Buffer
             </div>
         </div>
         
-        <!-- 虚拟的驱动程序指示 -->
-        <div id="driver-pointer">⬆ Driver Updates Ring</div>
+        <!-- 边界 -->
+        <div class="boundary-text">Syscall (用户/内核切换)</div>
+
+        <!-- 内核态 -->
+        <div id="area-kernel">
+            <!-- 代码区 -->
+            <div class="k-group">
+                <div class="k-title">Code (Logic)</div>
+                <div class="stack-layer" id="code-tcp">TCP Logic</div>
+                <div class="stack-layer" id="code-ip">IP Logic</div>
+                <div class="stack-layer" id="code-mac">MAC/Driver</div>
+            </div>
+
+            <!-- 数据区 -->
+            <div class="k-group">
+                <div class="k-title">Data (Buffer)</div>
+                <div id="skb-box">
+                    <span class="mem-addr">0xFF..</span>
+                    Socket Buffer<br>(sk_buff)
+                </div>
+            </div>
+
+            <!-- Ring Buffer 区 -->
+            <div class="k-group">
+                <div class="k-title">Ring Buffer</div>
+                <div id="ring-box">
+                    <span class="mem-addr">0xFA..</span>
+                    <div class="desc" id="desc-0">0: [Empty]</div>
+                    <div class="desc" id="desc-1">1: [Empty]</div>
+                    <div class="desc" id="desc-2">2: [Empty]</div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Hardware Zone -->
-    <div id="zone-hw">
-        <div class="zone-label">Hardware Layer (NIC)</div>
+    <!-- 连接总线 -->
+    <div class="bus-arrow"></div>
+    <div style="position:absolute; left:50%; transform:translateX(10px); top:495px; font-size:10px; color:#888;">PCIe</div>
 
-        <div id="nic-board">
-            <span class="nic-label">Network Interface Card (网卡板卡)</span>
+    <!-- 2. 硬件层 -->
+    <div id="hardware">
+        <div class="hw-label">Hardware (NIC)</div>
+        
+        <div id="nic-chip">
+            <div style="font-size:11px;">DMA</div>
+            <div style="font-size:16px; opacity:0.5;">↔</div>
             
-            <div class="nic-component" id="dma-engine">
-                DMA<br>Controller
-            </div>
-            
-            <div style="font-size: 20px; opacity: 0.5;">↔</div>
-
-            <!-- 网卡内部 SRAM -->
-            <div class="nic-component" id="nic-sram">
+            <!-- 网卡 SRAM -->
+            <div id="nic-sram">
                 <strong>On-Chip SRAM</strong><br>
-                <span style="font-size:10px; color:#a5d6a7;">Internal FIFO Buffer</span>
+                (FIFO)
             </div>
-
-            <div style="font-size: 20px; opacity: 0.5;">↔</div>
-
-            <div class="nic-component" id="phy-chip">PHY<br>Chip</div>
+            
+            <div style="font-size:16px; opacity:0.5;">↔</div>
+            <div style="font-size:11px;">PHY</div>
         </div>
 
-        <div id="cable">
-            <span style="position:absolute; right:10px; top:-20px; color:#666; font-size:12px;">Ethernet Cable</span>
-        </div>
+        <div id="cable"></div>
     </div>
 
-    <!-- 移动的数据包 -->
     <div id="packet">Data</div>
 
 </div>
 
 <script>
-    // 状态管理
-    let mode = null; // 'TX' or 'RX'
+    let mode = null;
     let step = 0;
-    let isRunning = false;
-    
-    // 元素引用
-    const packet = document.getElementById('packet');
-    const statusText = document.getElementById('status-text');
-    const stepInd = document.getElementById('step-indicator');
+    let running = false;
+    const pkt = document.getElementById('packet');
+    const status = document.getElementById('status-text');
     const btnNext = document.getElementById('btn-next');
 
-    // 坐标获取
-    function getPos(id) {
+    // 自动获取元素中心，适应740px布局
+    function getCenter(id) {
         const el = document.getElementById(id);
         const rect = el.getBoundingClientRect();
+        // 计算相对于 stage 的位置
         const stage = document.querySelector('.stage').getBoundingClientRect();
         return {
-            x: rect.left - stage.left + rect.width / 2,
-            y: rect.top - stage.top + rect.height / 2
+            x: rect.left - stage.left + rect.width/2,
+            y: rect.top - stage.top + rect.height/2
         };
     }
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-    // 核心移动函数
-    async function movePkt(targetId, duration = 800, scale = 1) {
-        const dest = getPos(targetId);
-        // 修正包的中心点
-        const w = 80 + (packet.getElementsByClassName('header-cell').length * 18);
-        const h = 40;
+    async function move(target, ms=800, scale=1) {
+        const pos = getCenter(target);
+        const w = pkt.offsetWidth;
+        const h = pkt.offsetHeight;
         
-        packet.style.transition = `all ${duration}ms cubic-bezier(0.45, 0, 0.55, 1)`;
-        packet.style.left = (dest.x - w/2) + 'px';
-        packet.style.top = (dest.y - h/2) + 'px';
-        packet.style.transform = `scale(${scale})`;
-        
-        await sleep(duration);
+        pkt.style.transition = `all ${ms}ms cubic-bezier(0.45, 0, 0.55, 1)`;
+        pkt.style.left = (pos.x - w/2) + 'px';
+        pkt.style.top = (pos.y - h/2) + 'px';
+        pkt.style.transform = `scale(${scale})`;
+        await sleep(ms);
     }
 
-    // 头部操作
-    function addHeader(name, color) {
-        const div = document.createElement('div');
-        div.className = 'header-cell';
-        div.style.backgroundColor = color;
-        div.innerText = name;
-        div.id = `hdr-${name}`;
-        // TX模式插前面，RX模拟完整包
-        packet.insertBefore(div, packet.firstChild);
-        packet.style.width = (80 + packet.getElementsByClassName('header-cell').length * 18) + 'px';
+    function addHdr(txt, col) {
+        const d = document.createElement('div');
+        d.className = 'hdr';
+        d.style.backgroundColor = col;
+        d.innerText = txt;
+        d.id = 'h-'+txt;
+        pkt.insertBefore(d, pkt.firstChild);
+        // 重置宽度以适应内容
+        pkt.style.width = 'auto';
+        // 最小宽度保证
+        if(pkt.offsetWidth < 70) pkt.style.width = '70px';
     }
 
-    function removeHeader(name) {
-        const h = document.getElementById(`hdr-${name}`);
-        if(h) h.remove();
-        packet.style.width = (80 + packet.getElementsByClassName('header-cell').length * 18) + 'px';
+    function remHdr(txt) {
+        const d = document.getElementById('h-'+txt);
+        if(d) d.remove();
+        if(document.querySelectorAll('.hdr').length === 0) pkt.style.width = '70px';
     }
 
-    // 协议栈高亮
-    async function flashStack(layerId) {
-        const el = document.getElementById(layerId);
-        el.classList.add('stack-active');
-        await sleep(600);
-        el.classList.remove('stack-active');
+    async function highlightCode(id) {
+        const el = document.getElementById(id);
+        el.classList.add('active-code');
+        await sleep(500);
+        el.classList.remove('active-code');
     }
 
-    // Ring Buffer 动作
-    async function updateRing(idx, active) {
-        const el = document.getElementById(`desc-${idx}`);
-        if(active) {
-            el.classList.add('desc-active');
-            el.innerText = "Desc [Ready to DMA]";
-        } else {
-            el.classList.remove('desc-active');
-            el.innerText = "Desc [Addr, Len]";
-        }
-    }
-
-    // ===================================
-    // 流程定义
-    // ===================================
-
-    // --- 发送流程 (TX) ---
-    const flowTX = [
+    // TX Flow
+    const txSteps = [
         {
-            txt: "1. 应用层: 生成数据，调用 send()",
-            fn: async () => {
-                const p = getPos('app-box');
-                packet.style.transition = 'none';
-                packet.style.left = (p.x - 40) + 'px';
-                packet.style.top = (p.y - 20) + 'px';
-                packet.style.opacity = 1;
-                packet.style.backgroundColor = 'var(--col-tx)';
-                packet.innerHTML = 'Data';
+            t: "1. 应用生成数据 (User RAM)",
+            f: async () => {
+                const p = getCenter('app-mem');
+                pkt.style.transition='none';
+                pkt.style.left = (p.x-35)+'px'; pkt.style.top = (p.y-18)+'px';
+                pkt.style.opacity=1; pkt.style.background='var(--tx-color)';
+                pkt.innerHTML='Data';
             }
         },
         {
-            txt: "2. 内存拷贝: 数据进入内核 Socket Buffer (位于 System RAM)",
-            fn: async () => {
-                await movePkt('skb-area');
+            t: "2. Copy to Kernel (内存内复制)",
+            f: async () => { await move('skb-box'); }
+        },
+        {
+            t: "3. TCP 协议处理 (Logic)",
+            f: async () => { await highlightCode('code-tcp'); addHdr('T', '#42a5f5'); }
+        },
+        {
+            t: "4. IP 协议处理 (Logic)",
+            f: async () => { await highlightCode('code-ip'); addHdr('I', '#ffa726'); }
+        },
+        {
+            t: "5. MAC/Driver (Logic)",
+            f: async () => { await highlightCode('code-mac'); addHdr('M', '#ab47bc'); }
+        },
+        {
+            t: "6. 更新 Ring Buffer (指针)",
+            f: async () => {
+                const d = document.getElementById('desc-1');
+                d.classList.add('active');
+                d.innerText = "1: [Ready]";
+                await sleep(400);
             }
         },
         {
-            txt: "3. 协议栈处理 (TCP): CPU 执行代码，封装 TCP 头部",
-            fn: async () => {
-                await flashStack('layer-tcp');
-                addHeader('TCP', 'var(--hdr-tcp)');
+            t: "7. DMA: RAM -> NIC SRAM",
+            f: async () => {
+                await move('nic-sram', 1500, 0.8);
+                document.getElementById('desc-1').classList.remove('active');
+                document.getElementById('desc-1').innerText = "1: [Done]";
             }
         },
         {
-            txt: "4. 协议栈处理 (IP): 路由查找，封装 IP 头部",
-            fn: async () => {
-                await flashStack('layer-ip');
-                addHeader('IP', 'var(--hdr-ip)');
-            }
-        },
-        {
-            txt: "5. 协议栈处理 (MAC): 封装以太网帧头",
-            fn: async () => {
-                await flashStack('layer-mac');
-                addHeader('MAC', 'var(--hdr-mac)');
-            }
-        },
-        {
-            txt: "6. 驱动层: 在 System RAM 的 Ring Buffer 中写入描述符",
-            fn: async () => {
-                // 这里虽然数据没动，但为了演示，我们让Ring闪烁
-                await updateRing(1, true);
-                // 模拟通知网卡
-                const nic = document.getElementById('nic-board');
-                nic.style.borderColor = 'gold';
-                await sleep(300);
-                nic.style.borderColor = '#000';
-            }
-        },
-        {
-            txt: "7. DMA 传输 (关键): 网卡 DMA 引擎从 System RAM 拉取数据到网卡 SRAM",
-            fn: async () => {
-                // 从 skb-area 飞到 nic-sram
-                // 注意：数据变小表示进入片上缓存
-                await movePkt('nic-sram', 1500, 0.8);
-                await updateRing(1, false); // 传输完释放
-            }
-        },
-        {
-            txt: "8. 物理发送: 网卡将 SRAM 中的数据转为信号发送到网线",
-            fn: async () => {
-                const cable = getPos('cable');
-                packet.innerHTML = ''; // 变信号
-                packet.style.width = '15px'; packet.style.height = '15px'; packet.style.borderRadius = '50%';
-                
-                packet.style.transition = 'all 0.6s linear';
-                packet.style.left = (cable.x + 150) + 'px';
-                packet.style.top = cable.y + 'px';
-                packet.style.opacity = 0;
-                await sleep(600);
-            }
-        }
-    ];
-
-    // --- 接收流程 (RX) ---
-    const flowRX = [
-        {
-            txt: "1. 物理接收: 信号到达网卡 PHY",
-            fn: async () => {
-                const cable = getPos('cable');
-                packet.innerHTML = ''; 
-                packet.style.width = '15px'; packet.style.height = '15px'; packet.style.borderRadius = '50%';
-                packet.style.backgroundColor = 'var(--col-rx)';
-                packet.style.opacity = 1;
-                
-                packet.style.transition = 'none';
-                packet.style.left = (cable.x + 150) + 'px';
-                packet.style.top = cable.y + 'px';
-                
-                const phy = getPos('phy-chip');
-                packet.style.transition = 'all 0.5s linear';
-                packet.style.left = (phy.x - 7) + 'px';
-                packet.style.top = (phy.y - 7) + 'px';
+            t: "8. 发送信号",
+            f: async () => {
+                const cab = getCenter('cable');
+                pkt.innerHTML=''; pkt.style.width='10px'; pkt.style.height='10px'; pkt.style.borderRadius='50%';
+                pkt.style.transition='all 0.5s linear';
+                pkt.style.left = (cab.x+30)+'px';
+                pkt.style.top = cab.y+'px';
+                pkt.style.opacity=0;
                 await sleep(500);
             }
-        },
+        }
+    ];
+
+    // RX Flow
+    const rxSteps = [
         {
-            txt: "2. 缓冲: 数据暂存入网卡片上 SRAM (FIFO)",
-            fn: async () => {
-                // 瞬间变回数据包形状
-                packet.style.width = '100px'; packet.style.height = '40px'; packet.style.borderRadius = '4px';
-                packet.innerHTML = 'Data';
-                addHeader('TCP', 'var(--hdr-tcp)');
-                addHeader('IP', 'var(--hdr-ip)');
-                addHeader('MAC', 'var(--hdr-mac)');
+            t: "1. 信号到达 -> NIC SRAM",
+            f: async () => {
+                const cab = getCenter('cable');
+                pkt.innerHTML=''; pkt.style.width='10px'; pkt.style.height='10px'; pkt.style.borderRadius='50%';
+                pkt.style.background='var(--rx-color)'; pkt.style.opacity=1;
+                pkt.style.transition='none';
+                pkt.style.left = (cab.x+30)+'px'; pkt.style.top = cab.y+'px';
                 
-                // 移动到 SRAM
-                await movePkt('nic-sram', 500, 0.8);
+                await move('nic-sram', 600, 0.8);
             }
         },
         {
-            txt: "3. DMA 写入 (关键): 网卡通过 DMA 将数据推送到 System RAM",
-            fn: async () => {
-                // 预先分配好的Ring Slot
-                await updateRing(2, true);
-                // 飞入内存
-                await movePkt('skb-area', 1200, 1);
-                // 网卡写回完成状态
-                await updateRing(2, false); 
+            t: "2. 缓冲重组帧",
+            f: async () => {
+                pkt.style.width='auto'; pkt.style.height='36px'; pkt.style.borderRadius='4px';
+                pkt.innerHTML='Data';
+                addHdr('T', '#42a5f5'); addHdr('I', '#ffa726'); addHdr('M', '#ab47bc');
+                await sleep(300);
             }
         },
         {
-            txt: "4. 中断处理 & 协议栈 (MAC): CPU 介入，剥离 MAC 头",
-            fn: async () => {
-                await flashStack('layer-mac');
-                removeHeader('MAC');
+            t: "3. DMA: NIC -> Kernel RAM",
+            f: async () => {
+                const d = document.getElementById('desc-2');
+                d.innerText = "2: [RX Busy]"; d.classList.add('active');
+                await move('skb-box', 1500, 1);
+                d.classList.remove('active'); d.innerText = "2: [Recv]";
             }
         },
         {
-            txt: "5. 协议栈 (IP): 路由/防火墙检查，剥离 IP 头",
-            fn: async () => {
-                await flashStack('layer-ip');
-                removeHeader('IP');
-            }
+            t: "4. MAC 处理 (去除头部)",
+            f: async () => { await highlightCode('code-mac'); remHdr('M'); }
         },
         {
-            txt: "6. 协议栈 (TCP): 端口匹配，剥离 TCP 头",
-            fn: async () => {
-                await flashStack('layer-tcp');
-                removeHeader('TCP');
-            }
+            t: "5. IP 处理",
+            f: async () => { await highlightCode('code-ip'); remHdr('I'); }
         },
         {
-            txt: "7. 接收完成: 数据从内核拷贝到用户空间",
-            fn: async () => {
-                await movePkt('app-box');
-                packet.innerHTML = "Received";
+            t: "6. TCP 处理",
+            f: async () => { await highlightCode('code-tcp'); remHdr('T'); }
+        },
+        {
+            t: "7. Copy to User (Recv)",
+            f: async () => {
+                await move('app-mem');
+                pkt.innerHTML = "OK";
             }
         }
     ];
 
-    // ===================================
-    // 控制逻辑
-    // ===================================
-
-    function resetAll() {
-        isRunning = false;
-        step = 0;
-        mode = null;
-        
-        packet.style.transition = 'none';
-        packet.style.opacity = 0;
-        packet.innerHTML = 'Data';
-        packet.style.width = '80px';
-        packet.style.transform = 'scale(1)';
-        
-        // 清理Header
-        const hdrs = document.getElementsByClassName('header-cell');
-        while(hdrs.length > 0) hdrs[0].remove();
-        
-        // 重置 UI
-        document.querySelectorAll('.descriptor').forEach(e => {
-            e.className = 'descriptor';
-            e.innerText = "Desc [Addr, Len]";
-        });
-        
-        statusText.innerText = "已重置。请选择模式。";
-        stepInd.innerText = "Step: 0/0";
+    function reset() {
+        running = false; step = 0; mode = null;
+        pkt.style.opacity=0; pkt.style.transition='none';
+        pkt.innerHTML='Data';
+        const hs = document.querySelectorAll('.hdr'); hs.forEach(h=>h.remove());
+        document.querySelectorAll('.desc').forEach((d,i)=> {d.className='desc'; d.innerText=i+': [Empty]'});
+        status.innerText = "已重置";
         btnNext.disabled = true;
     }
 
-    function setupMode(m) {
-        resetAll();
-        mode = m;
-        const total = m === 'TX' ? flowTX.length : flowRX.length;
-        stepInd.innerText = `Step: 0/${total}`;
-        statusText.innerText = `[${m} 模式] 准备就绪，点击“执行下一步”`;
+    function setMode(m) {
+        reset(); mode = m;
+        const total = m==='TX'?txSteps.length:rxSteps.length;
+        status.innerText = `模式: ${m} | 步骤: 0/${total}`;
         btnNext.disabled = false;
     }
 
-    async function nextStep() {
-        if(isRunning) return;
-        if(!mode) return;
-        
-        const flow = mode === 'TX' ? flowTX : flowRX;
-        if(step >= flow.length) return;
-        
-        isRunning = true;
-        btnNext.disabled = true;
-        
-        const currentAction = flow[step];
-        statusText.innerHTML = `<span class="info-highlight">${currentAction.txt}</span>`;
-        stepInd.innerText = `Step: ${step + 1}/${flow.length}`;
-        
-        await currentAction.fn();
-        
-        step++;
-        isRunning = false;
-        
+    async function next() {
+        if(running || !mode) return;
+        running = true; btnNext.disabled = true;
+        const flow = mode==='TX'?txSteps:rxSteps;
         if(step < flow.length) {
+            status.innerText = flow[step].t;
+            await flow[step].f();
+            step++;
             btnNext.disabled = false;
         } else {
-            statusText.innerText += " (流程结束)";
+            status.innerText = "流程结束";
         }
+        running = false;
     }
 
     async function autoPlay() {
-        if(!mode) { alert("请先点击 '准备发送' 或 '准备接收'"); return; }
-        if(step >= (mode === 'TX' ? flowTX.length : flowRX.length)) {
-            setupMode(mode);
-            await sleep(200);
-        }
-        
-        const flow = mode === 'TX' ? flowTX : flowRX;
-        while(step < flow.length) {
-            await nextStep();
-            await sleep(600);
+        if(!mode) return alert("请先选择模式");
+        while(step < (mode==='TX'?txSteps.length:rxSteps.length)) {
+            await next();
+            await sleep(500);
         }
     }
-
 </script>
+
 </body>
 </html>
