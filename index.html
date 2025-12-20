@@ -5,37 +5,45 @@ layout: default
 <div class="posts">
   {% for post in paginator.posts %}
     <article class="post">
-
       <h1><a href="{{ site.baseurl }}{{ post.url }}">{{ post.title }}</a></h1>
 
       <div class="entry">
         {{ post.excerpt }}
       </div>
-    <!-- 修改开始: 检查是否有 hide_readmore 变量 -->
-    {% unless post.hide_readmore %}
+      
+      {% unless post.hide_readmore %}
       <a href="{{ site.baseurl }}{{ post.url }}" class="read-more">Read More</a>
-    {% endunless %}
-    <!-- 修改结束 -->
+      {% endunless %}
     </article>
   {% endfor %}
-  <!-- 分页链接代码 -->
-  {% if paginator.total_pages > 1 %}
-  <div class="pagination">
-    {% if paginator.previous_page %}
-      <a href="{{ paginator.previous_page_path | prepend: site.baseurl | replace: '//', '/' }}" class="button">
-        &laquo; 上一页
-      </a>
-    {% endif %}
-  
-    <span class="page_number">
-      第 {{ paginator.page }} 页 / 共 {{ paginator.total_pages }} 页
-    </span>
-  
-    {% if paginator.next_page %}
-      <a href="{{ paginator.next_page_path | prepend: site.baseurl | replace: '//', '/' }}" class="button">
-        下一页 &raquo;
-      </a>
-    {% endif %}
-  </div>
+</div> <!-- 这里先关闭 posts div -->
+
+<!-- 将分页代码放在 posts 容器的外面 -->
+{% if paginator.total_pages > 1 %}
+<div class="pagination">
+  <!-- 1. 上一页按钮 -->
+  {% if paginator.previous_page %}
+    <a href="{{ paginator.previous_page_path | prepend: site.baseurl | replace: '//', '/' }}" class="button">
+      &laquo; 上一页
+    </a>
+  {% else %}
+    <!-- 可选：如果想在第一页占位，可以加一个不可点击的按钮，或者直接留空 -->
+    <span class="button disabled">&laquo; 上一页</span>
+  {% endif %}
+
+  <!-- 2. 页码显示 -->
+  <span class="page_number">
+    第 {{ paginator.page }} 页 / 共 {{ paginator.total_pages }} 页
+  </span>
+
+  <!-- 3. 下一页按钮 -->
+  {% if paginator.next_page %}
+    <a href="{{ paginator.next_page_path | prepend: site.baseurl | replace: '//', '/' }}" class="button">
+      下一页 &raquo;
+    </a>
+  {% else %}
+    <!-- 可选：如果想在最后一页占位，防止布局跳动 -->
+    <span class="button disabled">下一页 &raquo;</span>
   {% endif %}
 </div>
+{% endif %}
