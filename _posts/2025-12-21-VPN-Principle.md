@@ -12,8 +12,7 @@ VPN全链路加解密演示。
     width="100%" 
     frameborder="0" 
     scrolling="no" 
-    style="display: block; width: 100%; border: none; overflow-y: hidden;"
-    onload="this.style.height = this.contentWindow.document.documentElement.scrollHeight + 'px';"
+    style="height:700px; width: 100%; border: none; overflow-y: hidden;"
 ></iframe>
 
 
