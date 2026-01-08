@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电力纵向加密装置工程部署与原理演示</title>
+    <style>
+        :root {
+            --zone-secure: #e6f7ff;
+            --zone-public: #fff7e6;
+            --border-color: #91d5ff;
+            --dev-bg: #fff;
+            --line-color: #8c8c8c;
+            --font-main: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+
+        h1 { text-align: center; font-size: 24px; margin-bottom: 10px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; font-size: 14px; }
+
+        /* --- 拓扑区域 --- */
+        .topology-map {
+            position: relative;
+            height: 320px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: flex;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        /* 区域划分背景 */
+        .zone {
+            position: absolute;
+            top: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            padding-bottom: 10px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #999;
+            border-right: 1px dashed #ccc;
+        }
+        .zone-left { left: 0; width: 35%; background: var(--zone-secure); }
+        .zone-mid { left: 35%; width: 30%; background: var(--zone-public); }
+        .zone-right { left: 65%; width: 35%; background: var(--zone-secure); border-right: none;}
+
+        .zone-label { margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* 设备图标 */
+        .device {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 70px;
+            height: 70px;
+            background: white;
+            border: 2px solid #595959;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            font-size: 11px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .device i { font-size: 24px; margin-bottom: 4px; font-style: normal; display: block; }
+        .device-active { border-color: #1890ff; box-shadow: 0 0 15px #1890ff; }
+
+        /* 具体位置配置 */
+        #dev-host { left: 8%; border-color: #595959; }
+        #dev-sw1  { left: 20%; border-color: #13c2c2; color: #13c2c2; } /* 核心交换机 */
+        #dev-enc1 { left: 32%; background: #333; color: #00e5ff; border-color: #333; height: 80px; width: 50px; border-radius: 4px;} /* 加密装置 */
+        #dev-r1   { left: 42%; border-radius: 50%; width: 60px; height: 60px; border-color: #722ed1; color: #722ed1;} /* 接入路由器 */
+        
+        #dev-cloud{ left: 50%; width: 80px; height: 50px; border: 2px dashed #ccc; background: transparent; box-shadow: none; z-index: 5;}
+        
+        #dev-r2   { left: 58%; border-radius: 50%; width: 60px; height: 60px; border-color: #722ed1; color: #722ed1;}
+        #dev-enc2 { left: 68%; background: #333; color: #00e5ff; border-color: #333; height: 80px; width: 50px; border-radius: 4px;}
+        #dev-sw2  { left: 80%; border-color: #13c2c2; color: #13c2c2; }
+        #dev-rtu  { left: 92%; border-color: #595959; }
+
+        /* 连线 */
+        .link-line {
+            position: absolute;
+            top: 50%;
+            height: 3px;
+            background: #d9d9d9;
+            z-index: 1;
+            transform: translateY(-50%);
+        }
+
+        /* 状态指示灯 */
+        .led {
+            width: 8px; height: 8px; border-radius: 50%; background: #555;
+            margin-top: 5px; box-shadow: 0 0 2px #000;
+        }
+        .led.on { background: #52c41a; box-shadow: 0 0 5px #52c41a; }
+        .led.negotiating { background: #faad14; animation: blink 0.5s infinite; }
+
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        /* 数据包 */
+        .packet {
+            position: absolute;
+            top: 50%;
+            left: 8%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            display: none; /* 初始隐藏 */
+            transition: left 0.5s linear;
+        }
+        
+        /* 报文形状 */
+        .pkt-plain { background: #f5222d; border-radius: 50%; border: 2px solid #fff; }
+        .pkt-enc   { background: #1890ff; width: 30px; height: 16px; border-radius: 4px; border: 1px solid #0050b3; } /* 长方形代表封装 */
+
+        /* --- 底部控制台 --- */
+        .console-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .monitor-panel {
+            background: #262626;
+            color: #00ff00;
+            padding: 15px;
+            font-family: 'Consolas', monospace;
+            border-radius: 5px;
+            height: 180px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 3px solid #555;
+        }
+
+        .packet-viewer {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid #444;
+            margin-bottom: 10px;
+        }
+
+        .packet-block {
+            padding: 5px 8px;
+            border: 1px solid #fff;
+            margin: 0 2px;
+            font-size: 12px;
+            background: #333;
+            color: #fff;
+        }
+        .blk-tunnel { background: #0050b3; border-color: #1890ff; color: #fff; }
+        .blk-esp    { background: #0050b3; border-color: #1890ff; font-weight: bold; }
+        .blk-data   { background: #f5222d; color: white; }
+        .blk-enc-data { background: #434343; color: #00e5ff; letter-spacing: 2px; }
+
+        .log-area {
+            height: 60px;
+            font-size: 11px;
+            color: #aaa;
+            overflow-y: auto;
+            line-height: 1.4;
+        }
+        .log-entry { margin-bottom: 2px; }
+        .log-time { color: #1890ff; margin-right: 5px; }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 12px;
+            font-size: 15px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background: #1890ff;
+            color: white;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        button:hover { background: #40a9ff; }
+        button:disabled { background: #d9d9d9; color: #999; cursor: not-allowed; }
+        
+        .btn-reset { background: white; border: 1px solid #d9d9d9; color: #666; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>纵向加密装置：隧道模式封装原理演示</h1>
+    <p class="subtitle">场景：调度中心（安全I区）向变电站（安全I区）发送遥控指令</p>
+
+    <!-- 物理拓扑层 -->
+    <div class="topology-map">
+        <!-- 区域背景 -->
+        <div class="zone zone-left">
+            <span class="zone-label">主站侧 · 安全I区 (内网)</span>
+        </div>
+        <div class="zone zone-mid">
+            <span class="zone-label">调度数据网 (SPDnet)</span>
+        </div>
+        <div class="zone zone-right">
+            <span class="zone-label">变电站侧 · 安全I区 (内网)</span>
+        </div>
+
+        <!-- 连线 -->
+        <div class="link-line" style="left:8%; width:84%;"></div>
+
+        <!-- 设备节点 -->
+        <div class="device" id="dev-host">
+            <i>🖥️</i>SCADA<br>10.1.1.5
+        </div>
+        <div class="device" id="dev-sw1">
+            <i>⇆</i>核心交换<br>Layer 3
+        </div>
+        <div class="device" id="dev-enc1">
+            <div style="font-size:16px;">🛡️</div>
+            纵向加密<br>
+            <div class="led" id="led-enc1"></div>
+        </div>
+        <div class="device" id="dev-r1">
+            <i>🕸️</i>接入路由
+        </div>
+        
+        <div class="device" id="dev-cloud" style="color:#aaa;">SPDnet<br>WAN</div>
+
+        <div class="device" id="dev-r2">
+            <i>🕸️</i>接入路由
+        </div>
+        <div class="device" id="dev-enc2">
+            <div style="font-size:16px;">🛡️</div>
+            纵向加密<br>
+            <div class="led" id="led-enc2"></div>
+        </div>
+        <div class="device" id="dev-sw2">
+            <i>⇆</i>站内交换
+        </div>
+        <div class="device" id="dev-rtu">
+            <i>⚡</i>测控装置<br>10.2.2.8
+        </div>
+
+        <!-- 移动的数据包 -->
+        <div class="packet pkt-plain" id="packet"></div>
+    </div>
+
+    <!-- 底部监控与控制 -->
+    <div class="console-grid">
+        <div class="monitor-panel">
+            <!-- 报文解剖器 -->
+            <div class="packet-viewer" id="packetView">
+                <span style="color:#666; font-size:12px;">[等待数据生成...]</span>
+            </div>
+            <!-- 系统日志模拟 -->
+            <div class="log-area" id="sysLog">
+                <div class="log-entry">> 系统就绪。等待操作指令。</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="btn-negotiate" onclick="startNegotiation()">1. 建立加密隧道 (IKE协商)</button>
+            <button id="btn-send" onclick="startTransmission()" disabled>2. 发送控制指令</button>
+            <button class="btn-reset" onclick="resetAll()">重置系统</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 状态与配置
+    const devEnc1Led = document.getElementById('led-enc1');
+    const devEnc2Led = document.getElementById('led-enc2');
+    const packet = document.getElementById('packet');
+    const packetView = document.getElementById('packetView');
+    const sysLog = document.getElementById('sysLog');
+    
+    // 设备位置 (百分比)
+    const pos = {
+        host: 8,
+        sw1: 20,
+        enc1: 32,
+        r1: 42,
+        cloud: 50,
+        r2: 58,
+        enc2: 68,
+        sw2: 80,
+        rtu: 92
+    };
+
+    let isTunnelReady = false;
+
+    // 工具函数：写日志
+    function log(msg) {
+        const time = new Date().toLocaleTimeString('zh-CN', {hour12: false});
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
+        sysLog.insertBefore(entry, sysLog.firstChild);
+    }
+
+    // 工具函数：移动物体
+    function move(element, targetPct, duration = 1000) {
+        return new Promise(resolve => {
+            element.style.display = 'block';
+            element.style.transition = `left ${duration}ms linear`;
+            
+            // 强制重绘
+            void element.offsetWidth; 
+            
+            element.style.left = targetPct + '%';
+            setTimeout(resolve, duration);
+        });
+    }
+
+    // 工具函数：高亮设备
+    function highlight(devId, active) {
+        const dev = document.getElementById(devId);
+        if (active) dev.classList.add('device-active');
+        else dev.classList.remove('device-active');
+    }
+
+    // --- 步骤1：协商过程 ---
+    async function startNegotiation() {
+        document.getElementById('btn-negotiate').disabled = true;
+        log("开始 IKE 协商... 正在检查证书有效性");
+        
+        devEnc1Led.className = 'led negotiating';
+        devEnc2Led.className = 'led negotiating';
+        
+        await new Promise(r => setTimeout(r, 1500));
+        log("主站侧加密装置：证书验证通过，申请建立SA (Security Association)");
+        
+        await new Promise(r => setTimeout(r, 1500));
+        log("变电站侧加密装置：同意SA请求。密钥交换完成。");
+        
+        devEnc1Led.className = 'led on';
+        devEnc2Led.className = 'led on';
+        isTunnelReady = true;
+        document.getElementById('btn-send').disabled = false;
+        log("隧道建立成功！策略：允许 10.1.1.5 -> 10.2.2.8 (TCP 2404)");
+    }
+
+    // --- 步骤2：传输过程 ---
+    async function startTransmission() {
+        if (!isTunnelReady) return;
+        document.getElementById('btn-send').disabled = true;
+        
+        // 重置包位置
+        packet.className = 'packet pkt-plain';
+        packet.style.transition = 'none';
+        packet.style.left = pos.host + '%';
+        
+        // 1. Host -> SW1
+        log("主机生成104规约报文，下一跳指向核心交换机网关。");
+        updatePacketUI('plain');
+        highlight('dev-host', true);
+        await move(packet, pos.sw1, 1000);
+        highlight('dev-host', false);
+
+        // 2. SW1 -> Enc1
+        log("核心交换机路由查找：目标网段需走纵向加密装置。转发中...");
+        highlight('dev-sw1', true);
+        await move(packet, pos.enc1, 800);
+        highlight('dev-sw1', false);
+
+        // 3. Enc1 处理 (关键)
+        log(">> 到达主站加密装置。匹配策略，执行 ESP 隧道封装与加密。");
+        highlight('dev-enc1', true);
+        await new Promise(r => setTimeout(r, 800)); // 处理延时
+        
+        // 变身：封装
+        packet.className = 'packet pkt-enc'; // 变蓝，变方
+        updatePacketUI('encrypted');
+        log("报文已封装：外层IP改为加密装置互联地址。内层IP及载荷已加密。");
+        
+        // 4. Enc1 -> R1 -> Cloud -> R2 -> Enc2
+        log("发送至接入路由器，进入调度数据网。");
+        highlight('dev-enc1', false);
+        highlight('dev-r1', true); // 路由器只做转发，不看内容
+        
+        // 一气呵成穿过公网，体现隧道感
+        await move(packet, pos.enc2, 2500); 
+        highlight('dev-r1', false);
+        
+        // 5. Enc2 处理
+        log(">> 到达变电站加密装置。验证ESP完整性校验值(ICV)...通过。");
+        highlight('dev-enc2', true);
+        await new Promise(r => setTimeout(r, 800));
+        
+        // 变身：解封装
+        packet.className = 'packet pkt-plain'; // 变回红球
+        updatePacketUI('plain');
+        log("解密成功。剥离隧道头，还原原始报文。");
+        
+        // 6. Enc2 -> SW2 -> RTU
+        highlight('dev-enc2', false);
+        highlight('dev-sw2', true);
+        log("转发至站内交换机...");
+        await move(packet, pos.sw2, 800);
+        
+        highlight('dev-sw2', false);
+        highlight('dev-rtu', true);
+        log("测控装置接收指令：执行合闸！");
+        await move(packet, pos.rtu, 800);
+
+        log("演示结束。业务流程闭环。");
+        document.getElementById('btn-send').innerText = "传输完成";
+    }
+
+    function updatePacketUI(type) {
+        if (type === 'plain') {
+            packetView.innerHTML = `
+                <div class="packet-block blk-data">IP头: 10.1.x.x</div>
+                <div class="packet-block blk-data">TCP</div>
+                <div class="packet-block blk-data">104载荷</div>
+            `;
+        } else {
+            packetView.innerHTML = `
+                <div class="packet-block blk-tunnel">外层IP: 公网互联</div>
+                <div class="packet-block blk-esp">ESP头</div>
+                <div class="packet-block blk-enc-data">$$密文$$</div>
+                <div class="packet-block blk-esp">ESP尾+Auth</div>
+            `;
+        }
+    }
+
+    function resetAll() {
+        location.reload();
+    }
+
+</script>
+
+</body>
+</html>
