@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>地调中心 Bond1 (主备) 模式 IDS 合规部署</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; background-color: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { position: relative; width: 800px; height: 600px; background: white; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; overflow: hidden; }
+        
+        /* 设备基础样式 */
+        .device { position: absolute; border: 2px solid #333; border-radius: 6px; text-align: center; font-weight: bold; z-index: 2; display: flex; flex-direction: column; justify-content: center; align-items: center; background: white; }
+        .server { top: 50px; left: 350px; width: 100px; height: 80px; background: #e6f7ff; border-color: #1890ff; }
+        .switch-a { top: 250px; left: 200px; width: 120px; height: 60px; background: #f6ffed; border-color: #52c41a; }
+        .switch-b { top: 250px; left: 480px; width: 120px; height: 60px; background: #fffbe6; border-color: #faad14; }
+        .ids { top: 450px; left: 300px; width: 200px; height: 80px; background: #fff1f0; border-color: #f5222d; }
+
+        /* 状态指示灯 */
+        .status-light { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; }
+        .active-light { background: #52c41a; box-shadow: 0 0 5px #52c41a; }
+        .standby-light { background: #ccc; }
+
+        /* 连线 SVG */
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+        
+        /* 链路状态类 */
+        .link-active { stroke: #52c41a; stroke-width: 4; fill: none; transition: all 0.5s; }
+        .link-standby { stroke: #ccc; stroke-width: 2; stroke-dasharray: 5,5; fill: none; transition: all 0.5s; }
+        .link-mirror { stroke: #1890ff; stroke-width: 2; stroke-dasharray: 2,2; fill: none; }
+        
+        /* 故障叉号 */
+        .cross { position: absolute; top: 180px; left: 280px; font-size: 40px; color: red; font-weight: bold; opacity: 0; transition: opacity 0.3s; z-index: 10; }
+
+        /* 数据包动画 */
+        .packet { position: absolute; width: 12px; height: 12px; background: #1890ff; border-radius: 50%; z-index: 3; opacity: 0; }
+        
+        /* 正常状态动画 (走左边) */
+        @keyframes pathMaster {
+            0% { top: 120px; left: 380px; opacity: 1; }
+            30% { top: 250px; left: 260px; } /* 到达交换机A */
+            60% { top: 310px; left: 260px; } /* 镜像口 */
+            100% { top: 450px; left: 350px; opacity: 1; } /* 到达 IDS GE1 */
+        }
+        
+        /* 备用状态动画 (走右边) */
+        @keyframes pathSlave {
+            0% { top: 120px; left: 420px; opacity: 1; }
+            30% { top: 250px; left: 540px; } /* 到达交换机B */
+            60% { top: 310px; left: 540px; } /* 镜像口 */
+            100% { top: 450px; left: 450px; opacity: 1; } /* 到达 IDS GE2 */
+        }
+
+        .run-master { animation: pathMaster 2s infinite linear; }
+        .run-slave { animation: pathSlave 2s infinite linear; }
+
+        /* 控制按钮 */
+        .controls { margin-bottom: 15px; z-index: 100; }
+        button { padding: 10px 20px; cursor: pointer; background: #1890ff; color: white; border: none; border-radius: 4px; font-size: 16px; }
+        button:hover { background: #40a9ff; }
+        button.danger { background: #ff4d4f; }
+        button.danger:hover { background: #ff7875; }
+
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <button onclick="setNormal()" id="btnNormal" style="display:none">恢复正常模式 (A主 B备)</button>
+        <button onclick="setFailover()" id="btnFail" class="danger">模拟线路A故障 (切换到B)</button>
+    </div>
+
+    <div class="container">
+        <div style="position:absolute; top: 10px; left: 20px; color:#666; font-size:14px;">
+            <p><strong>当前状态：</strong> <span id="statusText" style="color:#52c41a; font-weight:bold;">正常运行 (A路承载流量)</span></p>
+        </div>
+
+        <svg>
+            <!-- 业务链路 -->
+            <path id="cableA" d="M 380 130 L 260 250" class="link-active" />
+            <path id="cableB" d="M 420 130 L 540 250" class="link-standby" />
+            
+            <!-- 镜像链路 (始终连接) -->
+            <path d="M 260 310 L 350 450" class="link-mirror" />
+            <path d="M 540 310 L 450 450" class="link-mirror" />
+        </svg>
+
+        <!-- 故障叉号 -->
+        <div id="failCross" class="cross">X</div>
+
+        <!-- 设备 -->
+        <div class="device server">
+            <div>服务器</div>
+            <div style="font-size:10px; color:#666">Bond1 (主备)</div>
+        </div>
+
+        <div class="device switch-a">
+            <div>交换机 A</div>
+            <div id="ledA" class="status-light active-light"></div>
+            <div style="font-size:10px;">Master</div>
+        </div>
+
+        <div class="device switch-b">
+            <div>交换机 B</div>
+            <div id="ledB" class="status-light standby-light"></div>
+            <div style="font-size:10px;">Backup</div>
+        </div>
+
+        <div class="device ids">
+            <div>华为 IDS</div>
+            <div style="font-size:10px; color:#666">全时段双活监控</div>
+            <div style="position:absolute; bottom:5px; font-size:10px; color:blue;">GE1 &nbsp;&nbsp;&nbsp; GE2</div>
+        </div>
+
+        <!-- 动画小球 -->
+        <div id="pkt1" class="packet run-master" style="animation-delay: 0s;"></div>
+        <div id="pkt2" class="packet run-master" style="animation-delay: 0.6s;"></div>
+        <div id="pkt3" class="packet run-master" style="animation-delay: 1.2s;"></div>
+
+    </div>
+
+    <div style="max-width: 800px; text-align: left; background: white; padding: 20px; border-radius: 8px;">
+        <h3>部署原理与合规解读</h3>
+        <p><strong>1. Bond1 的特点：</strong> 正常情况下，流量只走左边（Switch A）。右边（Switch B）虽然物理连接了，但没有业务流量，处于“静默热备”状态。</p>
+        <p><strong>2. 常见违规误区：</strong> 很多部署只连接了交换机 A 的镜像口。认为“反正 B 没流量，不用接”。</p>
+        <p><strong>3. 为什么必须插 3 条线（管理+双镜像）：</strong> 请点击上方红色按钮模拟故障。当线路 A 断开时，服务器会毫秒级切换到线路 B。如果 IDS 没有连接交换机 B，此时 IDS 就成了瞎子。而攻击者往往利用DDoS攻击打瘫主链路，迫使系统切换，然后在你“眼瞎”的备用链路上进行渗透。</p>
+        <p><strong>4. 华为 IDS 配置：</strong> 虽然物理上连接了两根线，但软件上只需将 GE1 和 GE2 划入同一个“安全区域（Security Zone）”即可，IDS 会自动处理这种主备流量切换，无需人工干预。</p>
+    </div>
+
+    <script>
+        function setFailover() {
+            document.getElementById('cableA').setAttribute('class', 'link-standby'); // A 变虚线
+            document.getElementById('cableB').setAttribute('class', 'link-active');  // B 变实线
+            
+            document.getElementById('failCross').style.opacity = '1';
+            
+            document.getElementById('ledA').className = 'status-light standby-light';
+            document.getElementById('ledB').className = 'status-light active-light';
+            
+            document.getElementById('statusText').innerHTML = '线路故障！流量已切换至 B 路';
+            document.getElementById('statusText').style.color = 'red';
+
+            // 切换数据包路径
+            var pkts = document.getElementsByClassName('packet');
+            for(var i=0; i<pkts.length; i++) {
+                pkts[i].classList.remove('run-master');
+                pkts[i].classList.add('run-slave');
+            }
+
+            document.getElementById('btnFail').style.display = 'none';
+            document.getElementById('btnNormal').style.display = 'inline-block';
+        }
+
+        function setNormal() {
+            document.getElementById('cableA').setAttribute('class', 'link-active');
+            document.getElementById('cableB').setAttribute('class', 'link-standby');
+            
+            document.getElementById('failCross').style.opacity = '0';
+            
+            document.getElementById('ledA').className = 'status-light active-light';
+            document.getElementById('ledB').className = 'status-light standby-light';
+            
+            document.getElementById('statusText').innerHTML = '正常运行 (A路承载流量)';
+            document.getElementById('statusText').style.color = '#52c41a';
+
+            // 切换数据包路径
+            var pkts = document.getElementsByClassName('packet');
+            for(var i=0; i<pkts.length; i++) {
+                pkts[i].classList.remove('run-slave');
+                pkts[i].classList.add('run-master');
+            }
+
+            document.getElementById('btnFail').style.display = 'inline-block';
+            document.getElementById('btnNormal').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
