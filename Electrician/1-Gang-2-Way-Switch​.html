@@ -1,0 +1,263 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>单开双控</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #1e1e1e;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h2 { color: #4CAF50; }
+        p { color: #bbb; max-width: 800px; text-align: center; }
+
+        .diagram-box {
+            position: relative;
+            width: 800px;
+            height: 400px;
+            background: #252526;
+            border: 2px solid #3e3e42;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            margin-top: 20px;
+        }
+
+        svg { width: 100%; height: 100%; cursor: pointer; }
+
+        /* 线路基础样式 */
+        .wire {
+            fill: none;
+            stroke-width: 8; /* 加粗线条 */
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: all 0.3s ease;
+            opacity: 0.4; /* 默认变暗，亮的时候高亮 */
+        }
+
+        /* 颜色定义 */
+        .w-red { stroke: #e74c3c; }    /* 火线/红线 */
+        .w-blue { stroke: #3498db; }   /* 蓝线 */
+        .w-yellow { stroke: #f1c40f; } /* 黄线 */
+        .w-neutral { stroke: #95a5a6; opacity: 1; } /* 零线常亮 */
+
+        /* 通电高亮状态 */
+        .wire.active {
+            opacity: 1;
+            filter: drop-shadow(0 0 8px currentColor); /* 发光效果 */
+            stroke-width: 10;
+        }
+
+        /* 开关盒子区域 */
+        .box-area {
+            fill: rgba(255,255,255,0.05);
+            stroke: #555;
+            stroke-dasharray: 5,5;
+            stroke-width: 2;
+        }
+
+        /* 接线柱 */
+        .terminal {
+            fill: #fff;
+            stroke: #000;
+            stroke-width: 2;
+            r: 6;
+        }
+        
+        /* 闸刀 */
+        .switch-blade {
+            stroke: #fff;
+            stroke-width: 4;
+            transition: 0.2s;
+        }
+
+        /* 胶布接头 */
+        .tape-joint {
+            fill: #000;
+            stroke: #666;
+            stroke-width: 2;
+        }
+
+        /* 灯泡 */
+        .bulb-off { fill: #444; }
+        .bulb-on { 
+            fill: #ffeb3b; 
+            filter: drop-shadow(0 0 20px #ffeb3b);
+        }
+
+        /* 文字标签 */
+        text { user-select: none; font-family: sans-serif; }
+        .label-main { font-size: 16px; font-weight: bold; fill: #eee; }
+        .label-sub { font-size: 12px; fill: #aaa; }
+        .label-term { font-size: 10px; fill: #fff; font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+    <h2>单开双控</h2>
+    <p>点击左右两个<b>绿色方框区域</b>来开关灯。<br>注意看：中间三根线平铺直叙，电流像流水一样清晰。</p>
+
+    <div class="diagram-box">
+        <svg viewBox="0 0 800 400" id="svgInfo">
+            <!-- ===================== 区域划分 ===================== -->
+            <!-- 你的位置 (Box A) -->
+            <rect x="50" y="50" width="180" height="300" rx="10" class="box-area" />
+            <text x="60" y="80" class="label-main">开关底盒 A</text>
+            <text x="60" y="100" class="label-sub">(你在的位置)</text>
+
+            <!-- 另一头 (Box B) -->
+            <rect x="570" y="50" width="180" height="300" rx="10" class="box-area" />
+            <text x="590" y="80" class="label-main">开关底盒 B</text>
+            <text x="590" y="100" class="label-sub">(另一头)</text>
+
+            <!-- ===================== 线路层 ===================== -->
+            
+            <!-- 1. 进火线 (永远有电) -->
+            <path d="M 50 200 L 100 200" class="wire w-red active" />
+            <text x="20" y="205" fill="#e74c3c" font-size="12" font-weight="bold">火线进</text>
+
+            <!-- 2. 中间三根线 (平行布置，绝对不交叉) -->
+            
+            <!-- 上轨：蓝线 (L1) -->
+            <path id="path-blue" d="M 180 150 L 620 150" class="wire w-blue" />
+            <text x="380" y="140" class="label-sub">蓝线 (L1)</text>
+
+            <!-- 中轨：黄线 (L2) -->
+            <path id="path-yellow-link" d="M 180 250 L 620 250" class="wire w-yellow" />
+            <text x="380" y="240" class="label-sub">黄线 (L2)</text>
+
+            <!-- 下轨：红线 (回头线/控制线) - 这一根最关键！ -->
+            <!-- 从右边B出来，走最下面，一路回到左边A -->
+            <path id="path-red-return" d="M 700 200 L 720 200 L 720 330 L 120 330 L 120 280" class="wire w-red" />
+            <text x="380" y="320" class="label-sub">红线 (回头电)</text>
+
+            <!-- 3. 出灯线 (墙里的黄线) -->
+            <!-- 从接头处向上去灯 -->
+            <path id="path-lamp-wire" d="M 120 260 L 120 50 L 250 50" class="wire w-yellow" />
+
+            <!-- 4. 零线 (直接进灯) -->
+            <path d="M 400 50 L 310 50" class="wire w-neutral" />
+            <text x="410" y="55" fill="#95a5a6" font-size="12">零线</text>
+
+            <!-- ===================== 关键组件 ===================== -->
+
+            <!-- 那个“胶布接头” -->
+            <rect x="110" y="260" width="20" height="20" class="tape-joint" />
+            <text x="140" y="275" fill="#fff" font-size="12">此处拧在一起(胶布)</text>
+            <!-- 连接回头红线和出灯黄线 -->
+
+            <!-- 灯泡 -->
+            <g transform="translate(280, 50)">
+                <circle r="20" id="bulb" class="bulb-off" />
+                <text x="-10" y="5" font-size="10" fill="black">灯</text>
+            </g>
+
+            <!-- 开关 A (左) -->
+            <!-- 结构：左边进(L)，右边两个出(L1, L2) -->
+            <circle cx="100" cy="200" class="terminal" /> <!-- L -->
+            <text x="90" y="220" class="label-term">L</text>
+            <circle cx="180" cy="150" class="terminal" /> <!-- L1 -->
+            <text x="190" y="150" class="label-term">L1</text>
+            <circle cx="180" cy="250" class="terminal" /> <!-- L2 -->
+            <text x="190" y="250" class="label-term">L2</text>
+            
+            <!-- 闸刀 A -->
+            <line id="blade-a" x1="100" y1="200" x2="180" y2="150" class="switch-blade" />
+            
+            <!-- 点击触发区 A -->
+            <rect x="50" y="130" width="150" height="150" fill="transparent" onclick="toggleSwitch('A')" style="cursor: pointer" />
+
+
+            <!-- 开关 B (右) -->
+            <!-- 结构：左边两个进(L1, L2)，右边一个出(L) -->
+            <circle cx="620" cy="150" class="terminal" /> <!-- L1 -->
+            <text x="600" y="150" class="label-term">L1</text>
+            <circle cx="620" cy="250" class="terminal" /> <!-- L2 -->
+            <text x="600" y="250" class="label-term">L2</text>
+            <circle cx="700" cy="200" class="terminal" /> <!-- L -->
+            <text x="710" y="220" class="label-term">L</text>
+
+            <!-- 闸刀 B -->
+            <line id="blade-b" x1="700" y1="200" x2="620" y2="150" class="switch-blade" />
+
+            <!-- 点击触发区 B -->
+            <rect x="600" y="130" width="150" height="150" fill="transparent" onclick="toggleSwitch('B')" style="cursor: pointer" />
+
+        </svg>
+    </div>
+
+    <script>
+        // 状态：0代表连上面的蓝线(L1)，1代表连下面的黄线(L2)
+        let stateA = 0; 
+        let stateB = 0;
+
+        function toggleSwitch(side) {
+            if(side === 'A') stateA = stateA === 0 ? 1 : 0;
+            if(side === 'B') stateB = stateB === 0 ? 1 : 0;
+            render();
+        }
+
+        function render() {
+            const bladeA = document.getElementById('blade-a');
+            const bladeB = document.getElementById('blade-b');
+            const pathBlue = document.getElementById('path-blue');
+            const pathYellowLink = document.getElementById('path-yellow-link');
+            const pathRedReturn = document.getElementById('path-red-return');
+            const pathLampWire = document.getElementById('path-lamp-wire');
+            const bulb = document.getElementById('bulb');
+
+            // 1. 动闸刀位置
+            // A开关：起点(100,200) -> 终点 (180, 150) 或 (180, 250)
+            if(stateA === 0) bladeA.setAttribute('y2', '150');
+            else bladeA.setAttribute('y2', '250');
+
+            // B开关：起点(700,200) -> 终点 (620, 150) 或 (620, 250)
+            if(stateB === 0) bladeB.setAttribute('y2', '150');
+            else bladeB.setAttribute('y2', '250');
+
+            // 2. 电流逻辑
+            let isBlueHot = false;
+            let isYellowHot = false;
+
+            // A 决定谁有电
+            pathBlue.classList.remove('active');
+            pathYellowLink.classList.remove('active');
+            
+            if(stateA === 0) {
+                pathBlue.classList.add('active');
+                isBlueHot = true;
+            } else {
+                pathYellowLink.classList.add('active');
+                isYellowHot = true;
+            }
+
+            // B 决定接不接得住电
+            let circuitCompleted = false;
+            if(stateB === 0 && isBlueHot) circuitCompleted = true;
+            if(stateB === 1 && isYellowHot) circuitCompleted = true;
+
+            // 3. 结果显示
+            pathRedReturn.classList.remove('active');
+            pathLampWire.classList.remove('active');
+            bulb.setAttribute('class', 'bulb-off');
+
+            if(circuitCompleted) {
+                pathRedReturn.classList.add('active'); // 回头红线亮
+                pathLampWire.classList.add('active');  // 墙内灯线亮
+                bulb.setAttribute('class', 'bulb-on'); // 灯亮
+            }
+        }
+
+        // 初始化
+        render();
+    </script>
+</body>
+</html>
