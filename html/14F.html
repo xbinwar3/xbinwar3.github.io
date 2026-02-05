@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>14F 机房网络架构动态图</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --box-bg: #161b22;
+            --border-color: #30363d;
+            --text-main: #c9d1d9;
+            --text-sub: #8b949e;
+            --zone-1: #ff7b72; /* I区 红 */
+            --zone-2: #d29922; /* II区 橙 */
+            --zone-3: #2f81f7; /* III区 蓝 */
+            --zone-4: #7ee787; /* IV区/内网 绿 */
+            --fiber: #a371f7; /* 光纤 紫 */
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h2 { text-align: center; margin-bottom: 30px; }
+
+        /* 布局容器 */
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1.2fr 0.8fr; /* 四列布局 */
+            gap: 40px;
+            width: 95%;
+            max-width: 1400px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 10px;
+        }
+
+        .col-title {
+            text-align: center;
+            font-weight: bold;
+            color: var(--text-sub);
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        /* 设备盒子样式 */
+        .device-box {
+            background: var(--box-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            position: relative;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+            z-index: 2;
+        }
+
+        .device-box:hover {
+            transform: translateY(-2px);
+            border-color: var(--text-main);
+        }
+
+        .device-title { font-weight: bold; font-size: 0.9em; margin-bottom: 5px; }
+        .device-desc { font-size: 0.75em; color: var(--text-sub); }
+
+        /* 特殊高亮 */
+        .hub { border: 2px solid #fff; box-shadow: 0 0 15px rgba(255,255,255,0.1); }
+        .fw { border-color: var(--zone-3); border-style: dashed; }
+        
+        /* 区域标签 */
+        .tag { display: inline-block; padding: 2px 5px; border-radius: 3px; font-size: 10px; color: #000; font-weight: bold; margin-right: 5px;}
+        .tag-1 { background: var(--zone-1); }
+        .tag-2 { background: var(--zone-2); }
+        .tag-3 { background: var(--zone-3); }
+        .tag-4 { background: var(--zone-4); }
+
+        /* SVG 连接线层 */
+        #connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* 动画路径 */
+        .path-line {
+            fill: none;
+            stroke-width: 2;
+            opacity: 0.3;
+        }
+        
+        .flow-particle {
+            fill: none;
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-dasharray: 10, 200; /* 粒子长度, 间隙 */
+            animation: dash 3s linear infinite;
+        }
+
+        @keyframes dash {
+            to { stroke-dashoffset: -210; }
+        }
+
+        /* Legend */
+        .legend {
+            margin-top: 30px;
+            display: flex;
+            gap: 20px;
+            font-size: 0.8em;
+            color: var(--text-sub);
+        }
+        .legend span { display: flex; align-items: center; gap: 5px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    </style>
+</head>
+<body>
+
+    <h2>14F 调度机房网络物理与逻辑架构图</h2>
+
+    <div class="container" id="diagram-container">
+        
+        <!-- 第一列：终端位置 -->
+        <div class="column">
+            <div class="col-title">终端/位置 (13-15F)</div>
+            <div class="device-box" id="term-15f">
+                <div class="device-title">15楼 司令台/大屏</div>
+                <div class="device-desc">I区/II区业务终端</div>
+                <span class="tag tag-1">I区</span>
+            </div>
+            <div class="device-box" id="term-14f">
+                <div class="device-title">14楼 1403前/后司令台</div>
+                <div class="device-desc">内网/KVM/大三区</div>
+                <span class="tag tag-3">III区</span><span class="tag tag-4">IV区</span>
+            </div>
+            <div class="device-box" id="term-servers">
+                <div class="device-title">A2/A3/A8/B系 柜内设备</div>
+                <div class="device-desc">服务器/工作站/五防/KVM</div>
+                <span class="tag tag-1">混合</span>
+            </div>
+        </div>
+
+        <!-- 第二列：物理配线核心 -->
+        <div class="column">
+            <div class="col-title">物理配线核心 (A4)</div>
+            <div class="device-box hub" id="a4-rack" style="height: 300px; display: flex; flex-direction: column; justify-content: center; text-align: center;">
+                <div class="device-title" style="font-size: 1.2em;">A4柜 配线架</div>
+                <div class="device-desc" style="margin-top:10px;">
+                    全网物理跳线枢纽<br>
+                    (第1-18排)<br>
+                    <br>
+                    所有终端网线由此<br>
+                    跳接至交换机
+                </div>
+            </div>
+        </div>
+
+        <!-- 第三列：交换与安全 -->
+        <div class="column">
+            <div class="col-title">逻辑交换/防火墙 (A5/A7)</div>
+            
+            <div class="device-box" id="sw-zone1">
+                <div class="device-title">A5 I区交换机</div>
+                <span class="tag tag-1">I区</span>
+            </div>
+            
+            <div class="device-box" id="sw-zone2">
+                <div class="device-title">A5 II区交换机</div>
+                <span class="tag tag-2">II区</span>
+            </div>
+
+            <!-- III-IV区 重点展示 -->
+            <div class="device-box fw" id="fw-3-4">
+                <div class="device-title">A5 III-IV区防火墙</div>
+                <div class="device-desc">边界隔离核心</div>
+                <span class="tag tag-3">III区</span><span class="tag tag-4">IV区</span>
+            </div>
+
+            <div class="device-box" id="sw-zone3">
+                <div class="device-title">A5 III区交换机</div>
+                <div class="device-desc">直连防火墙2口</div>
+                <span class="tag tag-3">III区</span>
+            </div>
+
+            <div class="device-box" id="sw-intra">
+                <div class="device-title">A7 内网/大三区交换机</div>
+                <div class="device-desc">跳接至防火墙0/1口</div>
+                <span class="tag tag-4">IV区</span>
+            </div>
+        </div>
+
+        <!-- 第四列：出口 -->
+        <div class="column">
+            <div class="col-title">光纤出口 (A6/ODF)</div>
+            <div class="device-box" id="a6-opt">
+                <div class="device-title">A6 光转电柜</div>
+                <div class="device-desc">第一排/第二排光转电</div>
+                <span class="tag" style="background:var(--fiber); color:white">光纤</span>
+            </div>
+            <div class="device-box" id="odf-1f">
+                <div class="device-title">一层光配 (ODF)</div>
+                <div class="device-desc">连接省网/地区网/电信</div>
+            </div>
+        </div>
+
+        <!-- SVG 画布 -->
+        <svg id="connections"></svg>
+    </div>
+
+    <div class="legend">
+        <span><div class="dot" style="background:var(--zone-1)"></div> I区流向</span>
+        <span><div class="dot" style="background:var(--zone-2)"></div> II区流向</span>
+        <span><div class="dot" style="background:var(--zone-3)"></div> III区流向</span>
+        <span><div class="dot" style="background:var(--zone-4)"></div> 内网(IV区)流向</span>
+        <span><div class="dot" style="background:var(--fiber)"></div> 外部出口</span>
+    </div>
+
+    <script>
+        // 简单的连线逻辑
+        const connections = [
+            // 1. I区业务: 15楼 -> A4 -> A5 I区交换机 -> A6
+            { from: 'term-15f', to: 'a4-rack', color: 'var(--zone-1)', type: 'physical' },
+            { from: 'a4-rack', to: 'sw-zone1', color: 'var(--zone-1)', type: 'physical' },
+            { from: 'sw-zone1', to: 'a6-opt', color: 'var(--fiber)', type: 'uplink' },
+
+            // 2. II区业务: 服务器 -> A4 -> A5 II区交换机 -> A6
+            { from: 'term-servers', to: 'a4-rack', color: 'var(--zone-2)', type: 'physical' },
+            { from: 'a4-rack', to: 'sw-zone2', color: 'var(--zone-2)', type: 'physical' },
+            { from: 'sw-zone2', to: 'a6-opt', color: 'var(--fiber)', type: 'uplink' },
+
+            // 3. 重点：IV区(内网) -> A4 -> 防火墙 -> III区
+            // 路径A: 内网终端(14F) -> A4
+            { from: 'term-14f', to: 'a4-rack', color: 'var(--zone-4)', type: 'physical' },
+            // 路径B: A4 -> A7内网交换机
+            { from: 'a4-rack', to: 'sw-intra', color: 'var(--zone-4)', type: 'physical' },
+            // 路径C: A7内网交换机 -> A4 (跳线) -> 防火墙 (这里简化显示，直接连防火墙示意逻辑)
+            { from: 'sw-intra', to: 'fw-3-4', color: 'var(--zone-4)', type: 'logic' },
+            // 路径D: 防火墙 -> III区核心
+            { from: 'fw-3-4', to: 'sw-zone3', color: 'var(--zone-3)', type: 'logic' },
+            
+            // 4. 出口
+            { from: 'sw-zone3', to: 'a6-opt', color: 'var(--fiber)', type: 'uplink' },
+            { from: 'a6-opt', to: 'odf-1f', color: 'var(--fiber)', type: 'uplink' }
+        ];
+
+        function drawConnections() {
+            const svg = document.getElementById('connections');
+            const container = document.getElementById('diagram-container');
+            svg.innerHTML = ''; // 清空旧线
+
+            connections.forEach(conn => {
+                const elFrom = document.getElementById(conn.from);
+                const elTo = document.getElementById(conn.to);
+
+                if (!elFrom || !elTo) return;
+
+                const rectFrom = elFrom.getBoundingClientRect();
+                const rectTo = elTo.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+
+                // 计算相对于容器的坐标
+                const x1 = rectFrom.right - containerRect.left;
+                const y1 = rectFrom.top + rectFrom.height / 2 - containerRect.top;
+                const x2 = rectTo.left - containerRect.left;
+                const y2 = rectTo.top + rectTo.height / 2 - containerRect.top;
+
+                // 贝塞尔曲线控制点
+                const cp1x = x1 + (x2 - x1) * 0.5;
+                const cp1y = y1;
+                const cp2x = x2 - (x2 - x1) * 0.5;
+                const cp2y = y2;
+
+                const pathData = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+
+                // 1. 绘制底线
+                const pathLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                pathLine.setAttribute('d', pathData);
+                pathLine.setAttribute('class', 'path-line');
+                pathLine.setAttribute('stroke', conn.color);
+                svg.appendChild(pathLine);
+
+                // 2. 绘制流动的粒子
+                const particle = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                particle.setAttribute('d', pathData);
+                particle.setAttribute('class', 'flow-particle');
+                particle.setAttribute('stroke', conn.color);
+                svg.appendChild(particle);
+            });
+        }
+
+        // 初始化和窗口调整时重绘
+        window.addEventListener('load', drawConnections);
+        window.addEventListener('resize', drawConnections);
+        
+        // 稍微延迟以确保布局完成
+        setTimeout(drawConnections, 100);
+    </script>
+</body>
+</html>
