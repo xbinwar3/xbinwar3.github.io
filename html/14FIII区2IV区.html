@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>14F 三区/四区 边界架构精细图</title>
+    <style>
+        :root {
+            --bg-color: #1e1e24;
+            --card-bg: #2b2b36;
+            --border-color: #444;
+            
+            /* 颜色定义 */
+            --c-zone4: #00d26a;   /* 内网/四区 - 绿色 */
+            --c-zone3: #2d9bf0;   /* 管理/三区 - 蓝色 */
+            --c-firewall: #f9a03f; /* 防火墙 - 橙色 */
+            --c-rack: #777;       /* 配线架 - 灰色 */
+        }
+
+        body {
+            background-color: var(--bg-color);
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #eee;
+            overflow: hidden;
+        }
+
+        h2 { margin-bottom: 20px; letter-spacing: 1px; color: #fff; }
+
+        /* 容器定义：网格布局 */
+        .diagram-container {
+            position: relative;
+            width: 1000px;
+            height: 600px;
+            background: #25252e;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 250px 1fr 250px; /* 左 中 右 */
+            grid-template-rows: 1fr 150px;          /* 上层(逻辑) 下层(配线) */
+            gap: 20px;
+        }
+
+        /* SVG 画布层 - 位于最底层 */
+        #connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0; /* 放在底层 */
+            pointer-events: none;
+        }
+
+        /* 设备卡片通用样式 */
+        .card {
+            background: var(--card-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            position: relative;
+            z-index: 1; /* 浮在连线上方 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            font-size: 14px;
+            transition: transform 0.2s;
+        }
+        .card:hover { transform: scale(1.02); border-color: #fff; }
+
+        .card-title { font-weight: bold; margin-bottom: 8px; font-size: 15px; }
+        .card-sub { font-size: 12px; color: #aaa; }
+        .port-badge { 
+            background: #333; color: #fff; 
+            padding: 2px 6px; border-radius: 4px; 
+            font-size: 11px; margin-top: 5px; 
+            border: 1px solid #555;
+        }
+
+        /* 特定设备定位与样式 */
+        
+        /* 1. 内网交换机 (左上) */
+        #dev-zone4 {
+            grid-column: 1; grid-row: 1;
+            align-self: center;
+            border-top: 4px solid var(--c-zone4);
+        }
+
+        /* 2. 防火墙 (中上 - 核心) */
+        #dev-fw {
+            grid-column: 2; grid-row: 1;
+            align-self: center;
+            justify-self: center;
+            width: 220px; height: 140px;
+            border: 2px solid var(--c-firewall);
+            background: rgba(249, 160, 63, 0.05);
+        }
+
+        /* 3. 三区交换机组 (右上) */
+        .right-group {
+            grid-column: 3; grid-row: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            height: 100%;
+        }
+
+        #dev-core3 {
+            border-top: 4px solid var(--c-zone3);
+            margin-bottom: 20px;
+        }
+        #dev-ext3 {
+            border-top: 4px solid var(--c-zone3);
+            border-style: dashed; /* 虚线框表示扩展区 */
+        }
+
+        /* 4. 配线架 (底部横跨) */
+        #dev-rack {
+            grid-column: 1 / span 3; /* 横跨所有列 */
+            grid-row: 2;
+            align-self: end;
+            height: 80px;
+            background: #222;
+            border: 1px dashed var(--c-rack);
+            flex-direction: row;
+            justify-content: space-around;
+        }
+        
+        /* 配线架内部的端口模拟点 */
+        .rack-port {
+            width: 12px; height: 12px; background: #444; border-radius: 50%;
+            border: 2px solid var(--c-rack);
+            position: relative;
+        }
+        .rack-port::after {
+            content: attr(data-label);
+            position: absolute; top: 18px; left: -20px; width: 60px;
+            text-align: center; font-size: 10px; color: #888;
+        }
+
+        /* 连线与动画 */
+        .path-line {
+            fill: none;
+            stroke-width: 3;
+            stroke-linejoin: round; /* 圆角折线 */
+        }
+        
+        .path-flow {
+            fill: none;
+            stroke-width: 5;
+            stroke-linejoin: round;
+            stroke-dasharray: 10, 20; /* 实线长，间隙 */
+            stroke-linecap: round;
+            animation: dashMove 1s linear infinite;
+            opacity: 0.8;
+        }
+
+        @keyframes dashMove {
+            to { stroke-dashoffset: -30; }
+        }
+
+        /* 图例 */
+        .legend {
+            margin-top: 15px;
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+
+    </style>
+</head>
+<body>
+
+    <h2>三区与四区边界架构图 (Circuit View)</h2>
+
+    <div class="diagram-container">
+        <!-- SVG 连线层 -->
+        <svg id="connections"></svg>
+
+        <!-- 左侧：IV区 -->
+        <div class="card" id="dev-zone4">
+            <div class="card-title">A7 内网交换机</div>
+            <div class="card-sub">IV区 (办公内网)</div>
+            <div class="port-badge">Port 16</div>
+        </div>
+
+        <!-- 中间：防火墙 -->
+        <div class="card" id="dev-fw">
+            <div class="card-title" style="color:var(--c-firewall)">A5 III-IV区防火墙</div>
+            <div class="card-sub">边界安全网关</div>
+            
+            <!-- 模拟端口位置供连线使用 -->
+            <div style="display:flex; width:100%; justify-content:space-between; position:absolute; bottom: -10px; padding: 0 20px; box-sizing: border-box;">
+                <div id="fw-p0" class="port-badge" style="background:var(--c-firewall); color:#000;">0口</div>
+                <div id="fw-p1" class="port-badge" style="background:var(--c-firewall); color:#000;">1口</div>
+            </div>
+            <div id="fw-p2" class="port-badge" style="position:absolute; right:-10px; top: 50%; transform:translateY(-50%); background:var(--c-firewall); color:#000;">2口</div>
+        </div>
+
+        <!-- 右侧：III区设备组 -->
+        <div class="right-group">
+            <div class="card" id="dev-core3">
+                <div class="card-title">A5 III区交换机</div>
+                <div class="card-sub">III区 (核心管理)</div>
+                <div class="port-badge">Port 12</div>
+            </div>
+
+            <div class="card" id="dev-ext3">
+                <div class="card-title">A7 大三区交换机</div>
+                <div class="card-sub">III区 (扩展业务)</div>
+                <div class="port-badge">Port 22</div>
+            </div>
+        </div>
+
+        <!-- 底部：配线架 -->
+        <div class="card" id="dev-rack">
+            <div style="position:absolute; top: -15px; left: 10px; color: var(--c-rack); font-weight:bold;">A4柜 物理配线层</div>
+            <!-- 定义三个配线点供连线吸附 -->
+            <div id="rack-p1" class="rack-port" data-label="13排-18口"></div>
+            <div id="rack-p2" class="rack-port" data-label="13排-17口"></div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <span><span class="dot" style="background:var(--c-zone4)"></span>IV区(内网)流量</span>
+        <span><span class="dot" style="background:var(--c-firewall)"></span>防火墙处理</span>
+        <span><span class="dot" style="background:var(--c-zone3)"></span>III区(管理)流量</span>
+        <span><span class="dot" style="background:var(--c-rack)"></span>物理跳线</span>
+    </div>
+
+    <script>
+        function drawLine(svg, fromId, toId, color, type) {
+            const fromEl = document.getElementById(fromId);
+            const toEl = document.getElementById(toId);
+            const svgRect = svg.getBoundingClientRect();
+            const r1 = fromEl.getBoundingClientRect();
+            const r2 = toEl.getBoundingClientRect();
+
+            // 计算中心点坐标相对于SVG
+            const x1 = r1.left + r1.width / 2 - svgRect.left;
+            const y1 = r1.top + r1.height / 2 - svgRect.top;
+            const x2 = r2.left + r2.width / 2 - svgRect.left;
+            const y2 = r2.top + r2.height / 2 - svgRect.top;
+
+            let d = "";
+
+            // 正交路由逻辑 (Manhattan routing)
+            if (type === 'direct-horizontal') {
+                // 直接水平连接
+                d = `M ${x1} ${y1} L ${x2} ${y2}`;
+            } else if (type === 'vertical-stack') {
+                // 垂直连接：先竖再平再竖 (Z型)
+                const midY = (y1 + y2) / 2;
+                d = `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
+            } else if (type === 'rack-connection') {
+                // 交换机 -> 配线架 -> 防火墙 的走线
+                // 假设是从上方设备连到底部配线架，再回到上方设备
+                // 这里我们分段画，函数只画一段。
+                // 策略：先垂直向下，再水平
+                const midY = (y1 + y2) / 2;
+                d = `M ${x1} ${y1} V ${midY} H ${x2} V ${y2}`;
+            }
+
+            // 背景底线
+            const bgLine = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            bgLine.setAttribute("d", d);
+            bgLine.setAttribute("class", "path-line");
+            bgLine.setAttribute("stroke", color);
+            bgLine.setAttribute("opacity", "0.2");
+            svg.appendChild(bgLine);
+
+            // 动画流线
+            const flowLine = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            flowLine.setAttribute("d", d);
+            flowLine.setAttribute("class", "path-flow");
+            flowLine.setAttribute("stroke", color);
+            svg.appendChild(flowLine);
+        }
+
+        function drawOrthogonal(svg, x1, y1, x2, y2, color, bendX = null) {
+            let d = "";
+            if (bendX !== null) {
+                // 强制在某个X坐标折弯
+                d = `M ${x1} ${y1} V ${y2} H ${x2}`; // 简单的 L 型: 垂直 -> 水平
+                if (Math.abs(x1 - x2) > 10 && Math.abs(y1 - y2) > 10) {
+                     // 如果错位较大，使用三段式
+                     const midY = y1 + (y2 - y1) * 0.7; // 向下走70%
+                     d = `M ${x1} ${y1} V ${midY} H ${x2} V ${y2}`;
+                }
+            } else {
+                // 默认直接连
+                d = `M ${x1} ${y1} L ${x2} ${y2}`;
+            }
+            
+            // 绘制逻辑同上
+            const bgLine = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            bgLine.setAttribute("d", d);
+            bgLine.setAttribute("class", "path-line");
+            bgLine.setAttribute("stroke", color);
+            bgLine.setAttribute("opacity", "0.3");
+            svg.appendChild(bgLine);
+
+            const flowLine = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            flowLine.setAttribute("d", d);
+            flowLine.setAttribute("class", "path-flow");
+            flowLine.setAttribute("stroke", color);
+            svg.appendChild(flowLine);
+        }
+
+        function getCenter(id) {
+            const el = document.getElementById(id);
+            const rect = el.getBoundingClientRect();
+            const svgRect = document.getElementById('connections').getBoundingClientRect();
+            return {
+                x: rect.left + rect.width/2 - svgRect.left,
+                y: rect.top + rect.height/2 - svgRect.top,
+                rect: rect
+            };
+        }
+
+        function render() {
+            const svg = document.getElementById('connections');
+            svg.innerHTML = ''; // 清空
+
+            // 1. 绿色路径：内网交换机 -> 配线架点1
+            const pZone4 = getCenter('dev-zone4');
+            const pRack1 = getCenter('rack-p1');
+            drawOrthogonal(svg, pZone4.x, pZone4.y, pRack1.x, pRack1.y, 'var(--c-zone4)', true);
+
+            // 2. 绿色路径继续：配线架点1 -> 防火墙0口
+            const pFw0 = getCenter('fw-p0');
+            // 从配线架向上连到防火墙0口
+            drawOrthogonal(svg, pRack1.x, pRack1.y, pFw0.x, pFw0.y, 'var(--c-zone4)', true);
+
+
+            // 3. 蓝色路径A：防火墙1口 -> 配线架点2
+            const pFw1 = getCenter('fw-p1');
+            const pRack2 = getCenter('rack-p2');
+            drawOrthogonal(svg, pFw1.x, pFw1.y, pRack2.x, pRack2.y, 'var(--c-zone3)', true);
+
+            // 4. 蓝色路径A继续：配线架点2 -> 大三区交换机
+            const pExt3 = getCenter('dev-ext3');
+            drawOrthogonal(svg, pRack2.x, pRack2.y, pExt3.x, pExt3.y, 'var(--c-zone3)', true);
+
+
+            // 5. 蓝色路径B (直连)：防火墙2口 -> III区核心交换机
+            // 这里是水平直连
+            const pFw2 = getCenter('fw-p2'); // 右侧端口
+            const pCore3 = getCenter('dev-core3');
+            // 手动画一条漂亮的折线：先向右，再向上，再向右
+            const pathDirect = `M ${pFw2.x} ${pFw2.y} H ${pFw2.x + 30} V ${pCore3.y} H ${pCore3.x}`;
+            
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            line.setAttribute("d", pathDirect);
+            line.setAttribute("class", "path-flow");
+            line.setAttribute("stroke", "var(--c-zone3)");
+            svg.appendChild(line);
+            
+            const lineBg = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            lineBg.setAttribute("d", pathDirect);
+            lineBg.setAttribute("class", "path-line");
+            lineBg.setAttribute("stroke", "var(--c-zone3)");
+            lineBg.setAttribute("opacity", "0.3");
+            svg.appendChild(lineBg);
+        }
+
+        window.onload = render;
+        window.onresize = render;
+        setTimeout(render, 100);
+
+    </script>
+</body>
+</html>
