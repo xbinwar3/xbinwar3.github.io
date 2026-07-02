@@ -43,11 +43,11 @@
             position: relative;
             width: 90%;
             max-width: 600px;
-            height: 400px;
+            height: 400px; /* 在这里调整高度 */
             overflow: hidden;
             border-radius: 12px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-            background-color: #eaeaea;
+            background-color: #eaeaea; /* 在这里调整留白处的背景色 */
         }
 
         /* 照片样式 */
@@ -55,9 +55,9 @@
             position: absolute;
             width: 100%;
             height: 100%;
-            object-fit: cover;
-            opacity: 0;
+            object-fit: contain; /* 完整显示模式 */
             transition: opacity 1s ease-in-out;
+            opacity: 0;
         }
 
         .slide.active {
