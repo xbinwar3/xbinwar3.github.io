@@ -169,15 +169,17 @@
         const music = document.getElementById('bgMusic');
         const musicBtn = document.getElementById('musicBtn');
 
-        function playAudio() {
+        // 核心：尝试直接播放的函数
+        function attemptPlay() {
             music.play().then(() => {
+                // 播放成功，让按钮旋转
                 musicBtn.classList.add('rotating');
             }).catch(error => {
-                console.log("自动播放被浏览器阻止，等待用户交互。");
+                console.log("直接自动播放被浏览器拦截，等待用户点击页面激活。");
             });
         }
 
-        // 切换播放/暂停
+        // 切换播放/暂停（手动点击按钮时）
         function toggleMusic() {
             if (music.paused) {
                 music.play();
@@ -188,15 +190,16 @@
             }
         }
 
-        // 监听用户在页面上的首次点击，以绕过浏览器的自动播放限制
+        // 1. 页面加载完毕后立即尝试直接播放
+        window.addEventListener('DOMContentLoaded', attemptPlay);
+        window.addEventListener('load', attemptPlay);
+
+        // 2. 保留备份方案：如果被拦截，用户只要点击页面任意地方立刻播放
         document.body.addEventListener('click', function() {
             if (music.paused) {
-                playAudio();
+                attemptPlay();
             }
         }, { once: true });
-
-        // 页面加载时尝试播放
-        window.addEventListener('load', playAudio);
     </script>
 </body>
 </html>
