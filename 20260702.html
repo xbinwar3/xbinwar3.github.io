@@ -167,54 +167,76 @@
             setInterval(nextSlide, slideInterval);
         }
 
-        // 2. 音乐播放逻辑
+        // 2. 音乐播放逻辑（优化版）
         const music = document.getElementById('bgMusic');
         const musicBtn = document.getElementById('musicBtn');
 
-        // 核心：尝试播放的函数
+        // 核心：尝试播放并处理状态
         function attemptPlay() {
-            music.play().then(() => {
-                musicBtn.classList.add('rotating');
-            }).catch(error => {
-                console.log("播放请求被浏览器拦截，等待交互。");
-            });
+            if (music.paused) {
+                music.play().then(() => {
+                    musicBtn.classList.add('rotating');
+                    clearAllAttempts(); // 播放成功后，清除所有尝试机制，释放内存
+                }).catch(error => {
+                    console.log("自动播放由于浏览器安全策略暂时受阻，正在等待时机...");
+                });
+            }
         }
 
-        // 切换播放/暂停
+        // 切换播放/暂停（手动点击按钮时）
         function toggleMusic() {
             if (music.paused) {
                 music.play();
                 musicBtn.classList.add('rotating');
+                clearAllAttempts();
             } else {
                 music.pause();
                 musicBtn.classList.remove('rotating');
             }
         }
 
-        // --- 自动播放兼容方案 ---
+        // --- 激进的自动播放触发逻辑 ---
 
-        // 方案 A：常规网页加载完毕后尝试播放
+        // A. 监听音频自身加载状态，一旦加载足够立刻播放
+        music.addEventListener('canplay', attemptPlay);
+        music.addEventListener('canplaythrough', attemptPlay);
+
+        // B. 页面生命周期监听
         window.addEventListener('DOMContentLoaded', attemptPlay);
         window.addEventListener('load', attemptPlay);
 
-        // 方案 B：针对微信、QQ内置浏览器的自动播放强制唤醒
+        // C. 高频轮询重试（每200毫秒尝试一次，直到成功或尝试15次后停止）
+        let attemptCount = 0;
+        const playTimer = setInterval(() => {
+            attemptCount++;
+            if (!music.paused) {
+                clearInterval(playTimer);
+            } else if (attemptCount > 15) {
+                clearInterval(playTimer); // 3秒后若仍被锁死则停止轮询，等待用户交互
+            } else {
+                attemptPlay();
+            }
+        }, 200);
+
+        // D. 微信环境强制播放
         document.addEventListener("WeixinJSBridgeReady", function () {
             attemptPlay();
         }, false);
-        
-        // 方案 C：针对部分老款安卓微信或特定内置浏览器的事件
-        document.addEventListener("YixinJSBridgeReady", function () {
-            attemptPlay();
-        }, false);
 
-        // 方案 D：保底策略，一旦用户触摸或点击页面任意位置，立刻触发播放
-        document.addEventListener('touchstart', function() {
-            if (music.paused) { attemptPlay(); }
-        }, { once: true });
-        
-        document.addEventListener('click', function() {
-            if (music.paused) { attemptPlay(); }
-        }, { once: true });
+        // E. 微小无感交互唤醒（鼠标微动、微小滚动都会直接触发，无需点击）
+        window.addEventListener('mousemove', attemptPlay, { once: true });
+        window.addEventListener('scroll', attemptPlay, { once: true });
+        window.addEventListener('touchstart', attemptPlay, { once: true });
+        window.addEventListener('click', attemptPlay, { once: true });
+
+        // 清理函数：避免成功播放后仍占用系统监听资源
+        function clearAllAttempts() {
+            clearInterval(playTimer);
+            music.removeEventListener('canplay', attemptPlay);
+            music.removeEventListener('canplaythrough', attemptPlay);
+            window.removeEventListener('mousemove', attemptPlay);
+            window.removeEventListener('scroll', attemptPlay);
+        }
     </script>
 </body>
 </html>
