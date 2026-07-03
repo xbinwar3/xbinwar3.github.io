@@ -122,7 +122,7 @@
     <button class="music-btn" id="musicBtn" onclick="toggleMusic()">🎵</button>
 
     <!-- 背景音乐：替换 src 后续为您自己的音乐链接或本地文件名 -->
-    <audio id="bgMusic" autoplay loop src="audio/whd.mp3"></audio>
+    <audio id="bgMusic" autoplay loop src="audio/whd.mp3" preload="auto"></audio>
 
     <header>
         <h1>毕业快乐，未来可期</h1>
@@ -171,17 +171,16 @@
         const music = document.getElementById('bgMusic');
         const musicBtn = document.getElementById('musicBtn');
 
-        // 核心：尝试直接播放的函数
+        // 核心：尝试播放的函数
         function attemptPlay() {
             music.play().then(() => {
-                // 播放成功，让按钮旋转
                 musicBtn.classList.add('rotating');
             }).catch(error => {
-                console.log("直接自动播放被浏览器拦截，等待用户点击页面激活。");
+                console.log("播放请求被浏览器拦截，等待交互。");
             });
         }
 
-        // 切换播放/暂停（手动点击按钮时）
+        // 切换播放/暂停
         function toggleMusic() {
             if (music.paused) {
                 music.play();
@@ -192,15 +191,29 @@
             }
         }
 
-        // 1. 页面加载完毕后立即尝试直接播放
+        // --- 自动播放兼容方案 ---
+
+        // 方案 A：常规网页加载完毕后尝试播放
         window.addEventListener('DOMContentLoaded', attemptPlay);
         window.addEventListener('load', attemptPlay);
 
-        // 2. 保留备份方案：如果被拦截，用户只要点击页面任意地方立刻播放
-        document.body.addEventListener('click', function() {
-            if (music.paused) {
-                attemptPlay();
-            }
+        // 方案 B：针对微信、QQ内置浏览器的自动播放强制唤醒
+        document.addEventListener("WeixinJSBridgeReady", function () {
+            attemptPlay();
+        }, false);
+        
+        // 方案 C：针对部分老款安卓微信或特定内置浏览器的事件
+        document.addEventListener("YixinJSBridgeReady", function () {
+            attemptPlay();
+        }, false);
+
+        // 方案 D：保底策略，一旦用户触摸或点击页面任意位置，立刻触发播放
+        document.addEventListener('touchstart', function() {
+            if (music.paused) { attemptPlay(); }
+        }, { once: true });
+        
+        document.addEventListener('click', function() {
+            if (music.paused) { attemptPlay(); }
         }, { once: true });
     </script>
 </body>
